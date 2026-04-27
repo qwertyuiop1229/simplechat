@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat App</title>
+    <!-- ここにnoindexメタタグを追加してGoogle検索からのインデックス登録を防ぎます -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      /* --- 全画面化用 --- */
+      html,
+      body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        background-color: #f3f4f6;
+        font-family: "Inter", sans-serif;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: none;
+        height: 100vh;
+        min-height: 100vh;
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        overflow: hidden;
+        background-color: #ffffff;
+        box-shadow: none;
+      }
+
+      .message-bubble {
+        max-width: 75%;
+        padding: 0.75rem 1rem;
+        border-radius: 1rem;
+        margin-bottom: 0.5rem;
+        word-wrap: break-word;
+      }
+      .my-message {
+        background-color: #e0e0e0; /* 薄いグレー */
+        border-bottom-right-radius: 0.25rem;
+      }
+      .other-message {
+        background-color: #f0f0f0; /* 非常に薄いグレー */
+        border-bottom-left-radius: 0.25rem;
+      }
+      .scrollable {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      /* カスタムスクロールバー */
+      .scrollable::-webkit-scrollbar {
+        width: 6px;
+      }
+      .scrollable::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .scrollable::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 10px;
+      }
+      .scrollable::-webkit-scrollbar-thumb:hover {
+        background: #999;
+      }
+      /* モーダル背景 */
+      .modal-overlay {
+        background-color: rgba(0, 0, 0, 0.75);
+      }
+      /* ドロップダウンコンテナのスタイル */
+      .dropdown-container {
+        position: relative;
+        display: inline-block;
+      }
+      .dropdown-content {
+        display: none;
+        position: absolute;
+        background-color: white;
+        min-width: 100px;
+        box-shadow: 0px 4px 8px 0px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+        right: 0;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        border: 1px solid #ddd;
+      }
+      .dropdown-content button {
+        color: black;
+        padding: 8px 12px;
+        text-decoration: none;
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background-color: transparent;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-size: 0.875rem;
+      }
+      .dropdown-content button:hover {
+        background-color: #f0f0f0;
+      }
+
+      /* メッセージ内容と入力欄 */
+      .message-content {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        word-break: break-word;
+      }
+      textarea#messageInput {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        word-break: break-word;
+        overflow-y: auto;
+        resize: none;
+        min-height: 44px;
+        max-height: 200px;
+        background-color: #f3f4f6; /* 薄い灰色 */
+        border: 1px solid #e5e7eb;
+        
+        /* ★スクロールバーを非表示にする設定 */
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      /* ★Chrome, Safari, Opera用 */
+      textarea#messageInput::-webkit-scrollbar {
+        display: none;
+      }
+      
+      textarea#messageInput:focus {
+        /* border-colorの変更を削除し、背景色は維持 */
+        background-color: #f3f4f6; 
+        outline: none; /* デフォルトのアウトラインも削除 */
+      }
+
+      /* 既読表示 */
+      .read-receipt {
+        font-size: 0.7rem;
+        color: #888;
+        margin-top: 2px;
+        display: block;
+        text-align: right;
+      }
+      .other-message .read-receipt {
+        text-align: left;
+      }
+
+      /* カスタムコンテキストメニュー */
+      .custom-context-menu {
+        position: absolute;
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 0.5rem;
+        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
+        z-index: 100;
+        padding: 4px 0;
+        min-width: 120px;
+      }
+      .custom-context-menu button {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: black;
+      }
+      .custom-context-menu button:hover {
+        background-color: #f0f0f0;
+      }
+
+      /* サイドバーリサイズ用ハンドル */
+      #resizer {
+        width: 2px;
+        cursor: col-resize;
+        background-color: #e5e7eb;
+        transition: background-color 0.2s;
+        flex-shrink: 0;
+      }
+      #resizer:hover {
+        background-color: #d1d5db;
+      }
+
+      /* リプライ機能用CSS */
+      .reply-quote {
+        background-color: rgba(0, 0, 0, 0.05);
+        padding: 6px 10px;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        cursor: pointer;
+        font-size: 0.875rem;
+      }
+      .reply-quote-nickname {
+        font-size: 0.75rem;
+        color: #555;
+        font-weight: 600;
+      }
+      .reply-quote-text {
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .message-highlight {
+        transition: background-color 0.8s ease-out;
+        background-color: #bde4ff !important;
+      }
+
+      /* --- メンバーリスト用スタイル (Discord風) --- */
+      #membersSidebar {
+        width: 240px;
+        background-color: #f9fafb;
+        border-left: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+      .member-group-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #9ca3af;
+        text-transform: uppercase;
+        padding: 1rem 1rem 0.5rem 1rem;
+        letter-spacing: 0.05em;
+      }
+      .member-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: background-color 0.1s;
+        border-radius: 0.25rem;
+        margin: 0 0.5rem;
+      }
+      .member-item:hover {
+        background-color: #e5e7eb;
+      }
+      .avatar-placeholder {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: #374151;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-right: 0.75rem;
+        position: relative;
+        flex-shrink: 0;
+      }
+      /* ステータスバッジ */
+      .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        position: absolute;
+        bottom: -1px;
+        right: -1px;
+        border: 2px solid #f9fafb;
+      }
+      .status-online { background-color: #22c55e; }
+      .status-away { background-color: #facc15; }
+      .status-offline { background-color: #9ca3af; }
+      
+      .member-info {
+        flex: 1;
+        overflow: hidden;
+      }
+      .member-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #1f2937;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .member-status-text {
+        font-size: 0.7rem;
+        color: #6b7280;
+      }
+
+      /* ユーザーパネル (Discord風マイページ) */
+      #userPanel {
+        background-color: #ebedef; /* サイドバーより少し濃いグレー */
+        padding: 0.75rem;
+        display: flex;
+        align-items: center;
+        border-top: 1px solid #d1d5db;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+      #userPanel:hover {
+        background-color: #e5e7eb;
+      }
+      .user-panel-info {
+        flex: 1;
+        overflow: hidden;
+        margin-right: 0.5rem;
+      }
+      .user-panel-name {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #1f2937;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .user-panel-id {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+
+      /* スマホ対応CSS */
+      @media (max-width: 767px) {
+        body { padding: 0; }
+        .container {
+          height: 100vh;
+          padding: 0;
+          border-radius: 0;
+        }
+        .container > div { flex-direction: column; }
+        #appContainer { flex-direction: column; }
+
+        #sidebar { width: 100% !important; }
+        #resizer { display: none; }
+        #membersSidebar { display: none; }
+
+        #roomList {
+          height: 30vh;
+          min-height: 150px;
+          max-height: 40vh;
+          overflow-y: auto;
+          border-bottom: 1px solid #ddd;
+        }
+        #messagesDisplay {
+          height: calc(100vh - 64px - 64px - 30vh);
+          min-height: 200px;
+        }
+        .my-message, .other-message { max-width: 90%; }
+        
+        /* スマホではユーザーパネルを大きく */
+        #userPanel {
+            padding: 1rem;
+        }
+      }
+
+      /* 強制上書き */
+      html, body {
+        height: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .container {
+        width: 100% !important;
+        max-width: none !important;
+        height: 100vh !important;
+        min-height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+    </style>
+  </head>
+  <!-- Google tag (gtag.js) -->
+  <script
+    async
+    src="https://www.googletagmanager.com/gtag/js?id=G-RY7DKH85XG"
+  ></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+    gtag("js", new Date());
+    gtag("config", "G-RY7DKH85XG");
+  </script>
+  <body>
+    <div
+      id="loadingOverlay"
+      class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden"
+    >
+      <div class="text-white text-xl">読み込み中...</div>
+    </div>
+
+    <div class="container">
+      <!-- ヘッダー -->
+      <div
+        class="bg-gray-800 text-white p-4 flex justify-center items-center shadow-md flex-shrink-0"
+      >
+        <!-- タイトルをニックネーム表示用に変更（中央寄せ、小さめ） -->
+        <h1 class="text-sm font-medium" id="headerTitle"></h1>
+      </div>
+
+      <!-- メインコンテンツエリア -->
+      <div
+        id="mainContent"
+        class="flex flex-1 overflow-hidden flex-col md:flex-row"
+      >
+        <!-- 認証フォーム -->
+        <div
+          id="authContainer"
+          class="flex-1 flex flex-col items-center justify-center p-8 hidden w-full"
+        >
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">ログイン</h2>
+          <div class="w-full max-w-md">
+            <input
+              type="email"
+              id="emailInput"
+              placeholder="メールアドレス"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <input
+              type="password"
+              id="passwordInput"
+              placeholder="パスワード"
+              class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <button
+              id="authButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-4"
+            >
+              ログイン
+            </button>
+            <div id="authMessage" class="text-red-600 text-center mt-4"></div>
+          </div>
+        </div>
+
+        <!-- ニックネーム設定コンテナ (初回用) -->
+        <div
+          id="nicknameContainer"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
+          >
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">
+              ニックネームを設定
+            </h2>
+            <p class="text-gray-600 mb-4">一度設定すると変更できません。</p>
+            <input
+              type="text"
+              id="nicknameInput"
+              placeholder="ニックネームを入力"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <button
+              id="setNicknameButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
+            >
+              ニックネームを決定
+            </button>
+            <div
+              id="nicknameMessage"
+              class="text-red-600 text-center mt-4"
+            ></div>
+          </div>
+        </div>
+
+        <!-- 設定モーダル (マイページ) -->
+        <div
+          id="settingsModal"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative"
+          >
+            <!-- 閉じるボタンを右上に絶対配置 -->
+            <button id="closeSettingsButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <!-- タイトルを中央寄せに変更 -->
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">アカウント設定</h2>
+            
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-20 h-20 rounded-full bg-gray-700 text-white flex items-center justify-center text-3xl font-bold mb-2 relative">
+                    <span id="settingsAvatarText"></span>
+                    <button class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                </div>
+                <p class="text-sm text-gray-500">アイコンの変更はまだサポートされていません</p>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="settingsNicknameInput">
+                    ニックネーム
+                </label>
+                <input
+                  type="text"
+                  id="settingsNicknameInput"
+                  class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none"
+                />
+            </div>
+
+            <div class="flex justify-between items-center border-t pt-4 gap-4">
+                 <!-- ログアウトボタン: 影なし -->
+                <button
+                  id="logoutButtonInModal"
+                  class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  ログアウト
+                </button>
+                 <!-- 保存ボタン: 影なし -->
+                <button
+                  id="saveSettingsButton"
+                  class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                >
+                  保存
+                </button>
+            </div>
+            <div id="settingsMessage" class="text-center mt-2 text-sm"></div>
+          </div>
+        </div>
+
+
+        <!-- 各種モーダル -->
+        <div
+          id="createRoomPasswordModal"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
+          >
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">
+              新しいルームを作成
+            </h2>
+            <input
+              type="text"
+              id="modalNewRoomNameInput"
+              placeholder="ルーム名を入力"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <input
+              type="password"
+              id="newRoomPasswordInput"
+              placeholder="パスワードを入力 (任意)"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <button
+              id="confirmCreateRoomButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
+            >
+              ルームを作成
+            </button>
+            <button
+              id="cancelCreateRoomButton"
+              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md mt-2 transition-colors duration-200"
+            >
+              キャンセル
+            </button>
+            <div
+              id="createRoomPasswordMessage"
+              class="text-red-600 text-center mt-4"
+            ></div>
+          </div>
+        </div>
+
+        <div
+          id="joinRoomPasswordModal"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
+          >
+            <h2
+              class="text-2xl font-bold mb-6 text-gray-800"
+              id="joinRoomTitle"
+            >
+              ルームに参加
+            </h2>
+            <input
+              type="password"
+              id="joinRoomPasswordInput"
+              placeholder="パスワードを入力"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <button
+              id="confirmJoinRoomButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
+            >
+              参加
+            </button>
+            <button
+              id="cancelJoinRoomButton"
+              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md mt-2 transition-colors duration-200"
+            >
+              キャンセル
+            </button>
+            <div
+              id="joinRoomPasswordMessage"
+              class="text-red-600 text-center mt-4"
+            ></div>
+          </div>
+        </div>
+
+        <div
+          id="deleteRoomConfirmModal"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
+          >
+            <h2
+              class="text-2xl font-bold mb-6 text-gray-800"
+              id="deleteConfirmTitle"
+            >
+              確認
+            </h2>
+            <p class="text-gray-600 mb-4" id="deleteConfirmMessage">
+              本当に「<span id="roomToDeleteName" class="font-bold"></span
+              >」ルームを削除しますか？
+            </p>
+            <button
+              id="confirmDeleteButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-2"
+            >
+              削除
+            </button>
+            <button
+              id="cancelDeleteButton"
+              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
+            >
+              キャンセル
+            </button>
+            <div
+              id="deleteConfirmErrorMessage"
+              class="text-red-600 text-center mt-4"
+            ></div>
+          </div>
+        </div>
+
+        <div
+          id="deleteRoomPasswordModal"
+          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
+        >
+          <div
+            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
+          >
+            <h2
+              class="text-2xl font-bold mb-6 text-gray-800"
+              id="deletePasswordTitle"
+            >
+              ルームのパスワード
+            </h2>
+            <p class="text-gray-600 mb-4" id="deletePasswordMessage">
+              ルーム「<span
+                id="roomToDeletePasswordName"
+                class="font-bold"
+              ></span
+              >」を削除するにはパスワードを入力してください。
+            </p>
+            <input
+              type="password"
+              id="deleteRoomPasswordInput"
+              placeholder="パスワードを入力"
+              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
+            />
+            <button
+              id="confirmDeletePasswordButton"
+              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-2"
+            >
+              削除
+            </button>
+            <button
+              id="cancelDeletePasswordButton"
+              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
+            >
+              キャンセル
+            </button>
+            <div
+              id="deletePasswordErrorMessage"
+              class="text-red-600 text-center mt-4"
+            ></div>
+          </div>
+        </div>
+
+        <!-- チャットアプリ本体 -->
+        <div id="appContainer" class="flex flex-1 hidden flex-col md:flex-row w-full h-full">
+          <!-- ルームリストサイドバー -->
+          <div id="sidebar" class="bg-gray-100 flex flex-col flex-shrink-0" style="width: 250px;">
+            <!-- ルームリスト -->
+            <div id="roomList" class="flex-1 scrollable p-4 pb-0">
+              <!-- ルームはここに動的に追加されます -->
+            </div>
+            
+            <!-- ルーム作成ボタンエリア -->
+            <div class="p-4 pt-2 pb-2">
+                <button
+                  id="promptCreateRoomButton"
+                  class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded-lg shadow-sm transition-colors duration-200"
+                >
+                  <i class="fas fa-plus mr-2"></i>ルームを作成
+                </button>
+            </div>
+
+            <!-- ユーザー情報パネル (Discord風マイページボタン) -->
+            <div id="userPanel" class="mt-auto">
+                <div class="avatar-placeholder" id="userPanelAvatar" style="width: 38px; height: 38px; margin-right: 10px;">
+                    <!-- イニシャル -->
+                    <div class="status-indicator status-online" id="userPanelStatus"></div>
+                </div>
+                <div class="user-panel-info">
+                    <div class="user-panel-name" id="userPanelName">User</div>
+                    <div class="user-panel-id" id="userPanelId">...</div>
+                </div>
+                <div class="text-gray-600">
+                    <i class="fas fa-cog"></i>
+                </div>
+            </div>
+          </div>
+
+          <!-- リサイズハンドル -->
+          <div id="resizer"></div>
+
+          <!-- チャットエリア -->
+          <div class="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+            <div
+              id="currentRoomHeader"
+              class="bg-gray-200 p-3 border-b border-gray-300 text-center font-semibold text-gray-800 text-lg hidden flex-shrink-0"
+            ></div>
+            <div
+              id="messagesDisplay"
+              class="flex-1 scrollable p-4 flex flex-col space-y-2"
+            >
+              <!-- メッセージはここに動的に追加されます -->
+            </div>
+            
+            <!-- メッセージ入力エリア（デザイン変更） -->
+            <div
+              id="messageInputArea"
+              class="p-4 pt-0 flex flex-col items-center bg-white flex-shrink-0"
+            >
+              <!-- リプライUI -->
+              <div
+                id="replyingToContainer"
+                class="w-full p-2 mb-2 bg-gray-200 rounded-lg flex items-center justify-between hidden"
+              >
+                <div class="flex-1 overflow-hidden">
+                  <div class="text-xs text-gray-600">
+                    返信先: <span id="replyingToNickname"></span>
+                  </div>
+                  <div
+                    id="replyingToText"
+                    class="text-sm text-gray-800 truncate"
+                  ></div>
+                </div>
+                <button
+                  id="cancelReplyButton"
+                  class="ml-2 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white text-xs rounded-md"
+                >
+                  X
+                </button>
+              </div>
+              <!-- 添付ファイルのプレビューエリア -->
+              <div
+                id="filePreviewContainer"
+                class="w-full p-2 mb-2 bg-gray-200 rounded-lg flex items-center justify-between hidden"
+              >
+                <span
+                  id="filePreviewName"
+                  class="text-sm text-gray-800 truncate"
+                ></span>
+                <button
+                  id="clearFileButton"
+                  class="ml-2 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white text-xs rounded-md"
+                >
+                  X
+                </button>
+              </div>
+              <div class="w-full">
+                <!-- ★縦位置を調整: mt-1 に設定しています。この数字(mt-0, mt-2など)を変えて調整可能 -->
+                <textarea
+                  id="messageInput"
+                  placeholder="メッセージを入力"
+                  class="flex-1 p-3 rounded-lg w-full focus:outline-none mt-1"
+                  rows="1"
+                  disabled
+                ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- メンバーリストサイドバー (Discord風) -->
+          <div id="membersSidebar" class="hidden md:flex scrollable">
+            <div id="membersList" class="p-2 w-full">
+              <!-- メンバーはここに動的に追加されます -->
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- カスタムコンテキストメニュー -->
+    <div id="messageContextMenu" class="custom-context-menu hidden">
+      <button id="copyMessageButton">コピー</button>
+      <button id="deleteMessageButton">削除</button>
+    </div>
+
+    <!-- Firebase SDKのインポート -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+      import {
+        getAuth,
+        signInWithEmailAndPassword,
+        signOut,
+        onAuthStateChanged,
+      } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+      import {
+        getFirestore,
+        doc,
+        getDoc,
+        addDoc,
+        setDoc,
+        updateDoc,
+        deleteDoc,
+        onSnapshot,
+        collection,
+        query,
+        where,
+        serverTimestamp,
+        orderBy,
+        getDocs,
+        writeBatch,
+      } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+      // Firebase設定
+      const firebaseConfig = {
+        apiKey: "AIzaSyDxGdHwHnJYhBErKcQHZs0H9JpwcSN-huY",
+        authDomain: "simplechat-65a0d.firebaseapp.com",
+        projectId: "simplechat-65a0d",
+        storageBucket: "simplechat-65a0d.firebasestorage.app",
+        messagingSenderId: "611067360180",
+        appId: "1:611067360180:web:5c43144af3ccc4988878e1",
+        measurementId: "G-2JMHWNMG4R",
+      };
+
+      const appId = "simplechat-65a0d";
+
+      let app;
+      let db;
+      let auth;
+      let userId = null;
+      let userNickname = null;
+      let isAdmin = false;
+      let currentRoomId = null;
+      let unsubscribeMessages = null;
+      let unsubscribeUserStatus = null;
+
+      let isAuthReady = false;
+      let pendingRoomJoin = null;
+      let pendingRoomDelete = null;
+
+      let lastMessagesData = [];
+      let attachedFile = null;
+      let replyingToMessage = null;
+
+      let readReceiptsUnsubscribe = null;
+      let roomReadReceipts = {};
+      let messagesIndexMap = {};
+
+      let awayTimer = null;
+      const AWAY_TIMEOUT = 5 * 60 * 1000;
+
+      // ★ メンバーリストのキャッシュと更新用インターバル
+      let cachedUsers = [];
+      let memberListRefreshInterval = null;
+
+      // DOM Elements
+      const loadingOverlay = document.getElementById("loadingOverlay");
+      const authContainer = document.getElementById("authContainer");
+      const emailInput = document.getElementById("emailInput");
+      const passwordInput = document.getElementById("passwordInput");
+      const authButton = document.getElementById("authButton");
+      const authMessage = document.getElementById("authMessage");
+
+      const nicknameContainer = document.getElementById("nicknameContainer");
+      const nicknameInput = document.getElementById("nicknameInput");
+      const setNicknameButton = document.getElementById("setNicknameButton");
+      const nicknameMessage = document.getElementById("nicknameMessage");
+
+      // Header Title
+      const headerTitle = document.getElementById("headerTitle");
+
+      // Settings Modal
+      const settingsModal = document.getElementById("settingsModal");
+      const closeSettingsButton = document.getElementById("closeSettingsButton");
+      const settingsNicknameInput = document.getElementById("settingsNicknameInput");
+      const saveSettingsButton = document.getElementById("saveSettingsButton");
+      const logoutButtonInModal = document.getElementById("logoutButtonInModal");
+      const settingsMessage = document.getElementById("settingsMessage");
+      const settingsAvatarText = document.getElementById("settingsAvatarText");
+
+      // User Panel
+      const userPanel = document.getElementById("userPanel");
+      const userPanelAvatar = document.getElementById("userPanelAvatar");
+      const userPanelName = document.getElementById("userPanelName");
+      const userPanelId = document.getElementById("userPanelId");
+
+      const createRoomPasswordModal = document.getElementById("createRoomPasswordModal");
+      const newRoomPasswordInput = document.getElementById("newRoomPasswordInput");
+      const confirmCreateRoomButton = document.getElementById("confirmCreateRoomButton");
+      const cancelCreateRoomButton = document.getElementById("cancelCreateRoomButton");
+      const createRoomPasswordMessage = document.getElementById("createRoomPasswordMessage");
+
+      const joinRoomPasswordModal = document.getElementById("joinRoomPasswordModal");
+      const joinRoomTitle = document.getElementById("joinRoomTitle");
+      const joinRoomPasswordInput = document.getElementById("joinRoomPasswordInput");
+      const confirmJoinRoomButton = document.getElementById("confirmJoinRoomButton");
+      const cancelJoinRoomButton = document.getElementById("cancelJoinRoomButton");
+      const joinRoomPasswordMessage = document.getElementById("joinRoomPasswordMessage");
+
+      const deleteRoomConfirmModal = document.getElementById("deleteRoomConfirmModal");
+      const roomToDeleteNameSpan = document.getElementById("roomToDeleteName");
+      const confirmDeleteButton = document.getElementById("confirmDeleteButton");
+      const cancelDeleteButton = document.getElementById("cancelDeleteButton");
+      const deleteConfirmErrorMessage = document.getElementById("deleteConfirmErrorMessage");
+
+      const deleteRoomPasswordModal = document.getElementById("deleteRoomPasswordModal");
+      const roomToDeletePasswordNameSpan = document.getElementById("roomToDeletePasswordName");
+      const deleteRoomPasswordInput = document.getElementById("deleteRoomPasswordInput");
+      const confirmDeletePasswordButton = document.getElementById("confirmDeletePasswordButton");
+      const cancelDeletePasswordButton = document.getElementById("cancelDeletePasswordButton");
+      const deletePasswordErrorMessage = document.getElementById("deletePasswordErrorMessage");
+
+      const appContainer = document.getElementById("appContainer");
+      const roomList = document.getElementById("roomList");
+      const promptCreateRoomButton = document.getElementById("promptCreateRoomButton");
+      
+      const membersSidebar = document.getElementById("membersSidebar");
+      const membersList = document.getElementById("membersList");
+
+      const currentRoomHeader = document.getElementById("currentRoomHeader");
+      const messagesDisplay = document.getElementById("messagesDisplay");
+      const messageInput = document.getElementById("messageInput");
+
+      const filePreviewContainer = document.getElementById("filePreviewContainer");
+      const filePreviewName = document.getElementById("filePreviewName");
+      const clearFileButton = document.getElementById("clearFileButton");
+
+      const replyingToContainer = document.getElementById("replyingToContainer");
+      const replyingToNickname = document.getElementById("replyingToNickname");
+      const replyingToText = document.getElementById("replyingToText");
+      const cancelReplyButton = document.getElementById("cancelReplyButton");
+
+      const messageContextMenu = document.getElementById("messageContextMenu");
+      const copyMessageButton = document.getElementById("copyMessageButton");
+      const deleteMessageButton = document.getElementById("deleteMessageButton");
+      let selectedMessageForContext = null;
+
+      // =========================================================================
+      // Initialization & Auth
+      // =========================================================================
+      function initializeFirebase() {
+        try {
+          if (!app) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+          }
+
+          onAuthStateChanged(auth, async (user) => {
+            loadingOverlay.classList.add("hidden");
+
+            if (user) {
+              userId = user.uid;
+              isAuthReady = true;
+
+              try {
+                const idTokenResult = await user.getIdTokenResult(true);
+                isAdmin = idTokenResult.claims.admin === true;
+              } catch (tokenError) {
+                console.error("Token error:", tokenError);
+                isAdmin = false;
+              }
+
+              const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+              const userProfileSnap = await getDoc(userProfileRef);
+
+              if (userProfileSnap.exists() && userProfileSnap.data().nickname) {
+                userNickname = userProfileSnap.data().nickname;
+                
+                // ★ヘッダータイトルの更新
+                headerTitle.textContent = `ニックネーム：${userNickname}${isAdmin ? " (管理者)" : ""}`;
+                updateUserPanelUI();
+                
+                authContainer.classList.add("hidden");
+                nicknameContainer.classList.add("hidden");
+                appContainer.classList.remove("hidden");
+                loadRooms();
+                startPresenceSystem();
+              } else {
+                authContainer.classList.add("hidden");
+                appContainer.classList.add("hidden");
+                nicknameContainer.classList.remove("hidden");
+                nicknameInput.value = "";
+              }
+            } else {
+              // Cleanup on logout
+              userId = null; userNickname = null; isAdmin = false; isAuthReady = false;
+              currentRoomId = null;
+              headerTitle.textContent = ""; // Reset header
+              currentRoomHeader.classList.add("hidden");
+              messagesDisplay.innerHTML = "";
+              messageInput.disabled = true;
+              stopPresenceSystem();
+              
+              authContainer.classList.remove("hidden");
+              appContainer.classList.add("hidden");
+              nicknameContainer.classList.add("hidden");
+              membersSidebar.classList.add("hidden");
+            }
+          });
+        } catch (error) {
+          console.error("Firebase Init Error:", error);
+          authMessage.textContent = `エラー: ${error.message}`;
+        }
+      }
+
+      function updateUserPanelUI() {
+        if(userNickname) {
+            userPanelName.textContent = userNickname;
+            userPanelId.textContent = `#${userId.substring(0, 4)}`;
+            userPanelAvatar.firstChild.textContent = userNickname.charAt(0).toUpperCase(); 
+            
+            if (!userPanelAvatar.querySelector('.status-indicator')) {
+                userPanelAvatar.innerHTML = userNickname.charAt(0).toUpperCase();
+                const stat = document.createElement('div');
+                stat.id = 'userPanelStatus';
+                stat.className = 'status-indicator status-online';
+                userPanelAvatar.appendChild(stat);
+            }
+        }
+      }
+
+      authButton.addEventListener("click", async () => {
+        const email = emailInput.value;
+        const password = passwordInput.value;
+        authMessage.textContent = "";
+        loadingOverlay.classList.remove("hidden");
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          authMessage.textContent = `メールアドレスまたはパスワードが違います。`;
+        } finally {
+          loadingOverlay.classList.add("hidden");
+        }
+      });
+
+      // Settings Modal Logic
+      userPanel.addEventListener("click", () => {
+        if(!userNickname) return;
+        settingsNicknameInput.value = userNickname;
+        settingsAvatarText.textContent = userNickname.charAt(0).toUpperCase();
+        settingsMessage.textContent = "";
+        settingsModal.classList.remove("hidden");
+      });
+
+      closeSettingsButton.addEventListener("click", () => {
+        settingsModal.classList.add("hidden");
+      });
+      
+      // ★ モーダルの背景クリックで閉じる処理
+      settingsModal.addEventListener("click", (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.classList.add("hidden");
+        }
+      });
+
+      saveSettingsButton.addEventListener("click", async () => {
+        const newName = settingsNicknameInput.value.trim();
+        if(newName.length < 1 || newName.length > 20) {
+            settingsMessage.textContent = "1〜20文字で入力してください。";
+            settingsMessage.className = "text-center mt-2 text-sm text-red-600";
+            return;
+        }
+        loadingOverlay.classList.remove("hidden");
+        try {
+            const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+            await setDoc(userProfileRef, { nickname: newName, createdAt: serverTimestamp() }, {merge: true});
+            userNickname = newName;
+            
+            // ★ヘッダータイトルの更新
+            headerTitle.textContent = `${userNickname}${isAdmin ? " (管理者)" : ""}`;
+            updateUserPanelUI();
+            
+            await updateUserStatus(document.visibilityState === 'hidden' ? 'offline' : 'online');
+
+            settingsMessage.textContent = "保存しました";
+            settingsMessage.className = "text-center mt-2 text-sm text-green-600";
+            setTimeout(() => settingsModal.classList.add("hidden"), 1000);
+        } catch(e) {
+            settingsMessage.textContent = "エラーが発生しました";
+            settingsMessage.className = "text-center mt-2 text-sm text-red-600";
+        } finally {
+            loadingOverlay.classList.add("hidden");
+        }
+      });
+
+      logoutButtonInModal.addEventListener("click", async () => {
+        settingsModal.classList.add("hidden");
+        loadingOverlay.classList.remove("hidden");
+        try {
+          await updateUserStatus('offline');
+          await signOut(auth);
+        } catch (error) {
+          console.error("Logout Error:", error);
+        } finally {
+          loadingOverlay.classList.add("hidden");
+        }
+      });
+
+
+      setNicknameButton.addEventListener("click", async () => {
+        const nickname = nicknameInput.value.trim();
+        if (nickname.length < 1 || nickname.length > 20) {
+          nicknameMessage.textContent = "1〜20文字で入力してください。";
+          return;
+        }
+        loadingOverlay.classList.remove("hidden");
+        try {
+          const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+          await setDoc(userProfileRef, { nickname: nickname, createdAt: serverTimestamp() });
+          userNickname = nickname;
+          
+          // ★ヘッダータイトルの更新
+          headerTitle.textContent = `${userNickname}${isAdmin ? " (管理者)" : ""}`;
+          updateUserPanelUI();
+          
+          nicknameContainer.classList.add("hidden");
+          appContainer.classList.remove("hidden");
+          loadRooms();
+          startPresenceSystem();
+        } catch (error) {
+          nicknameMessage.textContent = `エラー: ${error.message}`;
+        } finally {
+          loadingOverlay.classList.add("hidden");
+        }
+      });
+
+      // =========================================================================
+      // Presence System (Online/Offline Status)
+      // =========================================================================
+      
+      function resetAwayTimer() {
+        if (awayTimer) clearTimeout(awayTimer);
+        awayTimer = setTimeout(() => {
+            updateUserStatus('away');
+        }, AWAY_TIMEOUT);
+      }
+
+      function stopAwayTimer() {
+        if (awayTimer) {
+            clearTimeout(awayTimer);
+            awayTimer = null;
+        }
+      }
+      
+      function startPresenceSystem() {
+        updateUserStatus('online');
+        resetAwayTimer();
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('blur', handleBlur);
+        subscribeToUserStatus();
+        
+        if(memberListRefreshInterval) clearInterval(memberListRefreshInterval);
+        memberListRefreshInterval = setInterval(() => {
+            renderMembersList(cachedUsers);
+        }, 60000);
+      }
+
+      function stopPresenceSystem() {
+        stopAwayTimer();
+        if(memberListRefreshInterval) {
+            clearInterval(memberListRefreshInterval);
+            memberListRefreshInterval = null;
+        }
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('blur', handleBlur);
+        if (unsubscribeUserStatus) {
+          unsubscribeUserStatus();
+          unsubscribeUserStatus = null;
+        }
+      }
+      
+      const handleFocus = () => {
+        updateUserStatus('online');
+        resetAwayTimer();
+      };
+      const handleBlur = () => {
+        updateUserStatus('offline');
+        stopAwayTimer();
+      };
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+            updateUserStatus('offline');
+            stopAwayTimer();
+        } else {
+            updateUserStatus('online');
+            resetAwayTimer();
+        }
+      };
+      const handleBeforeUnload = () => updateUserStatus('offline');
+
+      async function updateUserStatus(state) {
+        if (!userId || !userNickname) return;
+        const statusElement = document.getElementById('userPanelStatus');
+        if(statusElement) {
+            statusElement.className = `status-indicator status-${state}`;
+        }
+
+        const statusRef = doc(db, `artifacts/${appId}/status`, userId);
+        try {
+          await setDoc(statusRef, {
+            state: state,
+            last_changed: serverTimestamp(),
+            nickname: userNickname,
+          }, { merge: true });
+        } catch (error) {
+          console.error("Status update error:", error);
+        }
+      }
+
+      function subscribeToUserStatus() {
+        if (unsubscribeUserStatus) unsubscribeUserStatus();
+        
+        const statusQuery = query(collection(db, `artifacts/${appId}/status`));
+        unsubscribeUserStatus = onSnapshot(statusQuery, (snapshot) => {
+            cachedUsers = [];
+            snapshot.forEach((doc) => {
+                cachedUsers.push({ id: doc.id, ...doc.data() });
+            });
+            renderMembersList(cachedUsers);
+        }, (error) => {
+            console.error("メンバーリストの購読エラー:", error);
+            membersList.innerHTML = `<div class="p-4 text-xs text-red-600">メンバーを読み込めません。</div>`;
+        });
+      }
+      
+      function renderMembersList(users) {
+        if (!membersList) return;
+        membersList.innerHTML = "";
+        
+        const onlineMembers = users.filter(u => u.state === 'online');
+        const awayMembers = users.filter(u => u.state === 'away');
+        const offlineMembers = users.filter(u => u.state !== 'online' && u.state !== 'away');
+
+        onlineMembers.sort((a, b) => (a.nickname || "").localeCompare(b.nickname || ""));
+        awayMembers.sort((a, b) => (a.nickname || "").localeCompare(b.nickname || ""));
+        offlineMembers.sort((a, b) => (a.nickname || "").localeCompare(b.nickname || ""));
+
+        const createGroup = (title, members) => {
+          if (members.length === 0) return;
+          
+          const titleDiv = document.createElement("div");
+          titleDiv.className = "member-group-title";
+          titleDiv.textContent = `${title} — ${members.length}`;
+          membersList.appendChild(titleDiv);
+
+          members.forEach(member => {
+            const item = document.createElement("div");
+            item.className = "member-item";
+
+            const avatar = document.createElement("div");
+            avatar.className = "avatar-placeholder";
+            avatar.textContent = (member.nickname || " ").charAt(0).toUpperCase();
+
+            const statusDot = document.createElement("div");
+            statusDot.className = `status-indicator status-${member.state || 'offline'}`;
+            avatar.appendChild(statusDot);
+
+            const info = document.createElement("div");
+            info.className = "member-info";
+
+            const name = document.createElement("div");
+            name.className = "member-name";
+            name.textContent = member.nickname || "不明なユーザー";
+            info.appendChild(name);
+
+            if (member.state === 'away') {
+                const statusText = document.createElement("div");
+                statusText.className = "member-status-text";
+                statusText.textContent = "離席中";
+                info.appendChild(statusText);
+            } else if (member.state === 'offline') {
+                const statusText = document.createElement("div");
+                statusText.className = "member-status-text";
+                statusText.textContent = formatTimeAgo(member.last_changed);
+                info.appendChild(statusText);
+            }
+
+            item.appendChild(avatar);
+            item.appendChild(info);
+            membersList.appendChild(item);
+          });
+        };
+
+        createGroup("Online", onlineMembers);
+        createGroup("Away", awayMembers);
+        createGroup("Offline", offlineMembers);
+      }
+
+      function formatTimeAgo(timestamp) {
+        if (!timestamp || !timestamp.toDate) return "";
+        const now = new Date();
+        const past = timestamp.toDate();
+        const diffInSeconds = Math.floor((now - past) / 1000);
+
+        if (diffInSeconds < 60) return `数秒前`;
+        const diffInMinutes = Math.floor(diffInSeconds / 60);
+        if (diffInMinutes < 60) return `${diffInMinutes}分前`;
+        const diffInHours = Math.floor(diffInMinutes / 60);
+        if (diffInHours < 24) return `${diffInHours}時間前`;
+        const diffInDays = Math.floor(diffInHours / 24);
+        return `${diffInDays}日前`;
+      }
+
+
+      // =========================================================================
+      // Room Features
+      // =========================================================================
+      async function loadRooms() {
+        const roomsQuery = query(collection(db, `artifacts/${appId}/public/data/rooms`));
+        onSnapshot(roomsQuery, (snapshot) => {
+          roomList.innerHTML = "";
+          snapshot.forEach((doc) => {
+            const room = doc.data();
+            const div = document.createElement("div");
+            div.className = "flex items-center justify-between p-3 mb-2 bg-gray-50 hover:bg-gray-200 rounded-lg cursor-pointer";
+            div.addEventListener("click", () => handleRoomSelection(doc.id, room.name, room.password));
+            
+            const nameDiv = document.createElement("div");
+            nameDiv.className = "flex-1 truncate";
+            nameDiv.textContent = room.name;
+            
+            const dropDiv = document.createElement("div");
+            dropDiv.className = "dropdown-container";
+            const btn = document.createElement("button");
+            btn.textContent = "⋮";
+            btn.className = "text-gray-700 w-6 h-6 hover:bg-gray-200 rounded-full flex items-center justify-center";
+            btn.onclick = (e) => {
+              e.stopPropagation();
+              const content = dropDiv.querySelector(".dropdown-content");
+              document.querySelectorAll(".dropdown-content").forEach(d => { if(d!==content) d.style.display="none"; });
+              content.style.display = content.style.display === "block" ? "none" : "block";
+            };
+            const content = document.createElement("div");
+            content.className = "dropdown-content";
+            const delBtn = document.createElement("button");
+            delBtn.textContent = "削除";
+            delBtn.onclick = (e) => {
+               e.stopPropagation();
+               content.style.display = "none";
+               handleDeleteRoomClick(doc.id, room.name, !!room.password, room.password);
+            };
+            content.appendChild(delBtn);
+            dropDiv.appendChild(btn);
+            dropDiv.appendChild(content);
+
+            div.appendChild(nameDiv);
+            div.appendChild(dropDiv);
+            roomList.appendChild(div);
+          });
+        });
+
+        document.addEventListener("click", (e) => {
+            if(!e.target.closest(".dropdown-container")) {
+                document.querySelectorAll(".dropdown-content").forEach(d => d.style.display="none");
+            }
+        });
+      }
+
+      function selectRoom(roomId, roomName) {
+        if(currentRoomId === roomId) return;
+        currentRoomId = roomId;
+        currentRoomHeader.textContent = roomName;
+        currentRoomHeader.classList.remove("hidden");
+        messagesDisplay.innerHTML = "";
+        lastMessagesData = [];
+        messageInput.disabled = false;
+        clearAttachedFile();
+        cancelReply();
+        
+        if(unsubscribeMessages) unsubscribeMessages();
+        if(readReceiptsUnsubscribe) readReceiptsUnsubscribe();
+
+        const q = query(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), orderBy("timestamp", "asc"));
+        unsubscribeMessages = onSnapshot(q, (snapshot) => {
+            snapshot.docChanges().forEach(change => {
+                if(change.type === "added" && change.doc.data().senderId !== userId && document.hidden) {
+                    showNotification("新規メッセージ");
+                }
+            });
+            messagesDisplay.innerHTML = "";
+            lastMessagesData = [];
+            snapshot.forEach(doc => {
+                const d = doc.data(); d.id = doc.id;
+                lastMessagesData.push(d);
+            });
+            messagesIndexMap = {};
+            lastMessagesData.forEach((m, i) => messagesIndexMap[m.id] = i);
+            renderMessagesWithReadReceipts();
+            messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+            updateReadReceiptForCurrentUser();
+        });
+
+        const rrRef = collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`);
+        readReceiptsUnsubscribe = onSnapshot(rrRef, (snap) => {
+            roomReadReceipts = {};
+            snap.forEach(d => roomReadReceipts[d.id] = d.data());
+            renderMessagesWithReadReceipts();
+        });
+        
+        membersSidebar.classList.remove("hidden");
+      }
+
+      promptCreateRoomButton.addEventListener("click", () => {
+         document.getElementById("modalNewRoomNameInput").value = "";
+         newRoomPasswordInput.value = "";
+         createRoomPasswordModal.classList.remove("hidden");
+      });
+      confirmCreateRoomButton.addEventListener("click", async () => {
+         const name = document.getElementById("modalNewRoomNameInput").value.trim();
+         const pass = newRoomPasswordInput.value.trim();
+         if(!name) return;
+         loadingOverlay.classList.remove("hidden");
+         createRoomPasswordModal.classList.add("hidden");
+         try {
+             const data = { name, createdAt: serverTimestamp(), createdBy: userId, createdByNickname: userNickname };
+             if(pass) data.password = pass;
+             await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+             alertMessage("ルームを作成しました", "success");
+         } catch(e) { console.error(e); }
+         finally { loadingOverlay.classList.add("hidden"); }
+      });
+      cancelCreateRoomButton.addEventListener("click", () => createRoomPasswordModal.classList.add("hidden"));
+
+      function handleRoomSelection(id, name, pass) {
+          if(pass && !isAdmin) {
+              pendingRoomJoin = { roomId: id, roomName: name, correctPassword: pass };
+              joinRoomPasswordInput.value = "";
+              joinRoomTitle.textContent = `${name}に参加`;
+              joinRoomPasswordModal.classList.remove("hidden");
+          } else {
+              selectRoom(id, name);
+          }
+      }
+      confirmJoinRoomButton.addEventListener("click", () => {
+          if(joinRoomPasswordInput.value === pendingRoomJoin.correctPassword) {
+              selectRoom(pendingRoomJoin.roomId, pendingRoomJoin.roomName);
+              joinRoomPasswordModal.classList.add("hidden");
+          } else {
+              joinRoomPasswordMessage.textContent = "パスワードが違います";
+          }
+      });
+      cancelJoinRoomButton.addEventListener("click", () => joinRoomPasswordModal.classList.add("hidden"));
+
+      function handleDeleteRoomClick(id, name, hasPass, correctPass) {
+          pendingRoomDelete = { roomId: id, roomName: name, hasPassword: hasPass, correctPassword: correctPass };
+          if(hasPass && !isAdmin) {
+              deleteRoomPasswordModal.classList.remove("hidden");
+              document.getElementById("roomToDeletePasswordName").textContent = name;
+              deleteRoomPasswordInput.value = "";
+          } else {
+              deleteRoomConfirmModal.classList.remove("hidden");
+              roomToDeleteNameSpan.textContent = name;
+          }
+      }
+      confirmDeleteButton.addEventListener("click", async () => {
+          deleteRoomConfirmModal.classList.add("hidden");
+          await executeDeleteRoom();
+      });
+      cancelDeleteButton.addEventListener("click", () => deleteRoomConfirmModal.classList.add("hidden"));
+      confirmDeletePasswordButton.addEventListener("click", async () => {
+          if(deleteRoomPasswordInput.value === pendingRoomDelete.correctPassword) {
+              deleteRoomPasswordModal.classList.add("hidden");
+              await executeDeleteRoom();
+          } else {
+              deletePasswordErrorMessage.textContent = "パスワードが違います";
+          }
+      });
+      cancelDeletePasswordButton.addEventListener("click", () => deleteRoomPasswordModal.classList.add("hidden"));
+      
+      async function deleteRoomAndMessages(roomId) {
+        if (currentRoomId === roomId) {
+          currentRoomId = null;
+          currentRoomHeader.classList.add("hidden");
+          messagesDisplay.innerHTML = "";
+          messageInput.disabled = true;
+          if (unsubscribeMessages) unsubscribeMessages();
+          if (readReceiptsUnsubscribe) readReceiptsUnsubscribe();
+        }
+
+        try {
+          await deleteDoc(doc(db, `artifacts/${appId}/public/data/rooms`, roomId));
+          console.log(`Successfully deleted room document ${roomId}.`);
+        } catch (error) {
+          console.error("Error during room deletion process:", error);
+          throw error;
+        }
+      }
+      const executeDeleteRoom = async () => {
+        if (!pendingRoomDelete) return;
+        loadingOverlay.classList.remove("hidden");
+        try {
+          await deleteRoomAndMessages(pendingRoomDelete.roomId);
+          alertMessage(`ルーム「${pendingRoomDelete.roomName}」を削除しました。`, "success");
+        } catch (error) {
+          alertMessage("ルームの削除に失敗しました。", "error");
+        } finally {
+          loadingOverlay.classList.add("hidden");
+          pendingRoomDelete = null;
+        }
+      };
+      
+      async function sendMessage() {
+          const text = messageInput.value.trim();
+          if((!text && !attachedFile) || !currentRoomId) return;
+          
+          loadingOverlay.classList.remove("hidden");
+          try {
+              const data = { text, senderId: userId, senderNickname: userNickname, timestamp: serverTimestamp() };
+              if(attachedFile) {
+                  Object.assign(data, { fileData: attachedFile.data, fileName: attachedFile.name, fileType: attachedFile.type, fileSize: attachedFile.size });
+              }
+              if(replyingToMessage) {
+                  data.replyTo = { messageId: replyingToMessage.id, senderNickname: replyingToMessage.senderNickname, text: replyingToMessage.text || "（ファイル）" };
+              }
+              await addDoc(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), data);
+              messageInput.value = ""; messageInput.style.height="auto";
+              clearAttachedFile(); cancelReply();
+              
+              // ★ メッセージ送信時にオンラインにし、タイマーをリセット
+              updateUserStatus('online');
+              resetAwayTimer();
+
+          } catch(e) { 
+              console.error(e);
+              alertMessage("送信に失敗しました", "error");
+          } finally {
+              loadingOverlay.classList.add("hidden");
+          }
+      }
+      messageInput.addEventListener("keydown", (e) => {
+          if(e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      });
+      messageInput.addEventListener("input", () => {
+          messageInput.style.height = "auto";
+          messageInput.style.height = messageInput.scrollHeight + "px";
+      });
+      
+      messageInput.addEventListener("paste", (e) => {
+          const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+          for(let i=0; i<items.length; i++) {
+              if(items[i].kind === 'file') {
+                  const f = items[i].getAsFile();
+                  if(f.size > 1024*1024) { alertMessage("ファイルは1MBまでです", "error"); return; }
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                      attachedFile = { data: ev.target.result, name: f.name, type: f.type, size: f.size };
+                      updateFilePreview();
+                  };
+                  reader.readAsDataURL(f);
+                  e.preventDefault();
+                  return;
+              }
+          }
+      });
+      function updateFilePreview() {
+        if(attachedFile) {
+          filePreviewName.textContent = `${attachedFile.name} (${(attachedFile.size / 1024).toFixed(2)} KB)`;
+          filePreviewContainer.classList.remove("hidden");
+        } else {
+          filePreviewContainer.classList.add("hidden");
+        }
+      }
+      clearFileButton.addEventListener("click", clearAttachedFile);
+      function clearAttachedFile() { attachedFile = null; updateFilePreview(); }
+
+      function escapeHtmlAndLinkUrls(text) {
+        let escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        return escapedText.replace(urlRegex, `<a href="$1" target="_blank" rel="noopener noreferrer" style="color: black; text-decoration: underline;">$1</a>`);
+      }
+      
+      function displayMessage(message, messageId, readByCount = 0) {
+        const isMyMessage = message.senderId === userId;
+        const messageRow = document.createElement("div");
+        messageRow.className = "message-row w-full flex " + (isMyMessage ? "justify-end" : "justify-start");
+        const messageElement = document.createElement("div");
+        messageElement.className = `message-bubble ${isMyMessage ? "my-message" : "other-message"} flex flex-col`;
+        messageElement.dataset.messageId = messageId;
+        const senderNicknameSpan = document.createElement("span");
+        senderNicknameSpan.className = `text-xs text-gray-600 mb-1 ${isMyMessage ? "text-right" : "text-left"}`;
+        senderNicknameSpan.textContent = message.senderNickname || "不明なユーザー";
+        messageElement.appendChild(senderNicknameSpan);
+        if (message.replyTo && message.replyTo.messageId) {
+          const replyQuoteDiv = document.createElement("div");
+          replyQuoteDiv.className = "reply-quote";
+          replyQuoteDiv.dataset.replyToId = message.replyTo.messageId;
+          const replyNicknameSpan = document.createElement("div");
+          replyNicknameSpan.className = "reply-quote-nickname";
+          replyNicknameSpan.textContent = `返信先: ${message.replyTo.senderNickname || "不明"}`;
+          const replyTextSpan = document.createElement("div");
+          replyTextSpan.className = "reply-quote-text";
+          replyTextSpan.textContent = message.replyTo.text || "（ファイル）";
+          replyQuoteDiv.appendChild(replyNicknameSpan);
+          replyQuoteDiv.appendChild(replyTextSpan);
+          messageElement.appendChild(replyQuoteDiv);
+        }
+        if (message.text) {
+          const messageTextSpan = document.createElement("span");
+          messageTextSpan.className = `message-content text-gray-900 ${isMyMessage ? "text-right" : "text-left"}`;
+          messageTextSpan.innerHTML = escapeHtmlAndLinkUrls(message.text);
+          messageElement.appendChild(messageTextSpan);
+        }
+        if (message.fileData && message.fileName) {
+          const fileAttachmentDiv = document.createElement("div");
+          fileAttachmentDiv.className = `mt-2 p-2 rounded-lg border border-gray-300 ${isMyMessage ? "bg-gray-200" : "bg-gray-100"} flex items-center space-x-2 cursor-pointer`;
+          fileAttachmentDiv.style.color = "#333";
+          fileAttachmentDiv.innerHTML = `<span class="flex-1 text-sm font-semibold truncate">${message.fileName}</span><span>▼</span>`;
+          fileAttachmentDiv.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
+          messageElement.appendChild(fileAttachmentDiv);
+        }
+        const timestampSpan = document.createElement("span");
+        timestampSpan.className = `text-xs text-gray-500 mt-1 ${isMyMessage ? "text-right" : "text-left"}`;
+        if (message.timestamp && message.timestamp.toDate) {
+          const date = message.timestamp.toDate();
+          timestampSpan.textContent = `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+        } else {
+          timestampSpan.textContent = "送信中...";
+        }
+        messageElement.appendChild(timestampSpan);
+        if (isMyMessage) {
+          const readSpan = document.createElement("span");
+          readSpan.className = "read-receipt";
+          if (readByCount > 0) {
+            readSpan.textContent = `既読${readByCount > 1 ? `（${readByCount}）` : ""}`;
+          } else {
+            readSpan.style.display = "none";
+          }
+          messageElement.appendChild(readSpan);
+        }
+        messageRow.appendChild(messageElement);
+        messagesDisplay.appendChild(messageRow);
+      }
+
+      function renderMessagesWithReadReceipts() {
+        const isScrolledToBottom = messagesDisplay.scrollHeight - messagesDisplay.clientHeight <= messagesDisplay.scrollTop + 1;
+        messagesDisplay.innerHTML = "";
+        lastMessagesData.forEach((msg, idx) => {
+          const readCount = computeReadByCount(msg, idx);
+          displayMessage(msg, msg.id, readCount);
+        });
+        if (isScrolledToBottom) {
+          messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+        }
+      }
+
+      function computeReadByCount(message, msgIndex) {
+        let count = 0;
+        Object.entries(roomReadReceipts).forEach(([rid, receipt]) => {
+          if (!rid || rid === message.senderId) return;
+          if (receipt.lastReadMessageId && messagesIndexMap[receipt.lastReadMessageId] >= msgIndex) count++;
+          else if (receipt.lastReadAt && message.timestamp && receipt.lastReadAt.toMillis() >= message.timestamp.toMillis()) count++;
+        });
+        return count;
+      }
+
+      async function updateReadReceiptForCurrentUser() {
+        if (!currentRoomId || !userId) return;
+        try {
+          const lastMsgId = lastMessagesData.length ? lastMessagesData[lastMessagesData.length - 1].id : null;
+          const myReceiptRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`, userId);
+          await setDoc(myReceiptRef, { lastReadAt: serverTimestamp(), lastReadMessageId: lastMsgId }, { merge: true });
+        } catch (error) {}
+      }
+      
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) updateReadReceiptForCurrentUser(); });
+      window.addEventListener("focus", updateReadReceiptForCurrentUser);
+
+      messagesDisplay.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          const bubble = e.target.closest(".message-bubble");
+          if(bubble) {
+              const msgData = lastMessagesData.find(m => m.id === bubble.dataset.messageId);
+              if(!msgData) return;
+              selectedMessageForContext = msgData;
+              messageContextMenu.style.left = `${e.clientX}px`;
+              messageContextMenu.style.top = `${e.clientY}px`;
+              messageContextMenu.classList.remove("hidden");
+          } else {
+              messageContextMenu.classList.add("hidden");
+          }
+      });
+      document.addEventListener("click", (e) => { if(!messageContextMenu.contains(e.target)) messageContextMenu.classList.add("hidden"); });
+      
+      copyMessageButton.addEventListener("click", () => {
+          if(selectedMessageForContext && selectedMessageForContext.text) {
+              navigator.clipboard.writeText(selectedMessageForContext.text);
+              alertMessage("コピーしました", "success");
+          }
+          messageContextMenu.classList.add("hidden");
+      });
+      deleteMessageButton.addEventListener("click", async () => {
+          if(selectedMessageForContext && (selectedMessageForContext.senderId === userId || isAdmin)) {
+              await deleteDoc(doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`, selectedMessageForContext.id));
+              alertMessage("削除しました", "success");
+          } else {
+              alertMessage("権限がありません", "warning");
+          }
+          messageContextMenu.classList.add("hidden");
+      });
+
+      messagesDisplay.addEventListener("dblclick", (e) => {
+          const bubble = e.target.closest(".message-bubble");
+          if(bubble) {
+              const m = lastMessagesData.find(msg => msg.id === bubble.dataset.messageId);
+              if(m) {
+                  replyingToMessage = m;
+                  replyingToNickname.textContent = m.senderNickname;
+                  replyingToText.textContent = m.text || (m.fileName ? "ファイル" : "...");
+                  replyingToContainer.classList.remove("hidden");
+                  messageInput.focus();
+              }
+          }
+      });
+      cancelReplyButton.addEventListener("click", cancelReply);
+      function cancelReply() { replyingToMessage=null; replyingToContainer.classList.add("hidden"); }
+      messagesDisplay.addEventListener("click", (e) => {
+        const q = e.target.closest(".reply-quote");
+        if(q) {
+            const el = messagesDisplay.querySelector(`.message-bubble[data-message-id="${q.dataset.replyToId}"]`);
+            if(el) {
+                el.scrollIntoView({behavior:"smooth", block:"center"});
+                el.classList.add("message-highlight");
+                setTimeout(()=>el.classList.remove("message-highlight"), 1200);
+            }
+        }
+      });
+      
+      function downloadFile(base64Data, fileName, mimeType) {
+        try {
+          const parts = base64Data.split(';base64,');
+          const byteCharacters = atob(parts[1]);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], {type: mimeType});
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } catch(e) { console.error(e); }
+      }
+
+      function alertMessage(msg, type="info") {
+          const box = document.createElement("div");
+          // ★ 通知ログの配色変更: success時は薄い灰色(bg-gray-200)に濃い文字(text-gray-800)
+          let colorClass = "bg-gray-800 text-white";
+          if (type === "error") colorClass = "bg-red-600 text-white";
+          else if (type === "success") colorClass = "bg-gray-200 text-gray-800 border border-gray-300";
+          
+          box.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg z-50 ${colorClass}`;
+          box.textContent = msg;
+          document.body.appendChild(box);
+          setTimeout(()=>box.remove(), 3000);
+      }
+
+      function showNotification(msg) {
+          if(Notification.permission === "granted") {
+              const n = new Notification("Chat App", { body: msg, silent: true });
+              n.onclick = () => { window.focus(); n.close(); };
+          }
+      }
+      
+      // =========================================================================
+      // Keyboard Shortcuts (Enter for Confirm, Shift for Cancel) - ★追加
+      // =========================================================================
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          if (
+            !authContainer.classList.contains("hidden") &&
+            (document.activeElement === emailInput || document.activeElement === passwordInput)
+          ) {
+            e.preventDefault(); authButton.click();
+          } else if (
+            !nicknameContainer.classList.contains("hidden") && document.activeElement === nicknameInput
+          ) {
+            e.preventDefault(); setNicknameButton.click();
+          } else if (
+            !createRoomPasswordModal.classList.contains("hidden") &&
+            (document.activeElement === document.getElementById("modalNewRoomNameInput") || document.activeElement === newRoomPasswordInput)
+          ) {
+            e.preventDefault(); confirmCreateRoomButton.click();
+          } else if (
+            !joinRoomPasswordModal.classList.contains("hidden") && document.activeElement === joinRoomPasswordInput
+          ) {
+            e.preventDefault(); confirmJoinRoomButton.click();
+          } else if (!deleteRoomConfirmModal.classList.contains("hidden")) {
+            e.preventDefault(); confirmDeleteButton.click();
+          } else if (
+            !deleteRoomPasswordModal.classList.contains("hidden") && document.activeElement === deleteRoomPasswordInput
+          ) {
+            e.preventDefault(); confirmDeletePasswordButton.click();
+          } else if(
+            !settingsModal.classList.contains("hidden") && document.activeElement === settingsNicknameInput
+          ) {
+            e.preventDefault(); saveSettingsButton.click();
+          }
+        }
+
+        if (e.key === "Shift") {
+          if (!createRoomPasswordModal.classList.contains("hidden")) {
+            cancelCreateRoomButton.click();
+          } else if (!joinRoomPasswordModal.classList.contains("hidden")) {
+            cancelJoinRoomButton.click();
+          } else if (!deleteRoomConfirmModal.classList.contains("hidden")) {
+            cancelDeleteButton.click();
+          } else if (!deleteRoomPasswordModal.classList.contains("hidden")) {
+            cancelDeletePasswordButton.click();
+          } else if (!settingsModal.classList.contains("hidden")) {
+            closeSettingsButton.click();
+          }
+        }
+      });
+
+      // =========================================================================
+      // Sidebar Resizing Feature - ★改善版に置き換え
+      // =========================================================================
+      function initializeResizer() {
+      const sidebar = document.getElementById("sidebar");
+      const resizer = document.getElementById("resizer");
+        const SIDEBAR_WIDTH_KEY = "chatAppSidebarWidth";
+
+        const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+        if (savedWidth) {
+          sidebar.style.width = savedWidth;
+        }
+
+      let isResizing = false;
+
+        resizer.addEventListener("mousedown", (e) => {
+          isResizing = true;
+          document.body.style.userSelect = "none";
+          document.addEventListener("mousemove", handleMouseMove);
+          document.addEventListener("mouseup", handleMouseUp);
+        });
+
+        function handleMouseMove(e) {
+          if (isResizing) {
+            const newWidth = Math.max(180, Math.min(600, e.clientX));
+            sidebar.style.width = `${newWidth}px`;
+          }
+        }
+
+        function handleMouseUp() {
+          isResizing = false;
+          document.body.style.userSelect = "";
+          document.removeEventListener("mousemove", handleMouseMove);
+          document.removeEventListener("mouseup", handleMouseUp);
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebar.style.width);
+        }
+      }
+
+      // =========================================================================
+      // Application Startup
+      // =========================================================================
+      window.onload = () => {
+          loadingOverlay.classList.remove("hidden");
+          initializeFirebase();
+          if("Notification" in window) Notification.requestPermission();
+          initializeResizer(); // ★追加
+      };
+    </script>
+  </body>
+</html>
