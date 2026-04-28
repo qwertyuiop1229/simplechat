@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- ユーティリティ関数 ---
+    
+    // ログインしているか
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 管理者リストに含まれているか（FirestoreのadminListドキュメントを参照）
+    function isAdmin(appId) {
+      return isAuthenticated() && 
+        (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/adminList).data.emails);
+    }
+
+    // 許可リストに含まれているか（正規に招待されたユーザーか）
+    function isAllowedUser(appId) {
+      return isAuthenticated() && 
+        (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/allowedEmails).data.emails);
+    }
+
+    // --- 各コレクションのルール ---
+
+    match /artifacts/{appId} {
+      
+      // 1. 管理者リスト設定
+      match /settings/adminList {
+        allow read: if isAllowedUser(appId);
+        allow write: if isAdmin(appId);
+      }
+
+      // 新規: 許可リスト設定
+      match /settings/allowedEmails {
+        // 未ログイン状態のCloudflare Workers(特権アカウント)も読む必要があるため、
+        // Workers用アカウントの特定メアドの場合は直接許可するか、Workersアカウント自体を許可リストに入れる想定です。
+        // （Workers用アカウントのメアドも adminList や allowedEmails に入れておく必要があります）
+        allow read: if isAuthenticated(); 
+        allow write: if isAdmin(appId);
+      }
+
+      // 2. ユーザープロフィール（ニックネーム・アイコン）
+      match /users/{userId}/profile/nicknameDoc {
+        // 他の人のアイコンも表示するため、読み取りは許可リストユーザーのみ
+        allow read: if isAllowedUser(appId);
+        // 自分のプロフィールのみ、本人が更新可能
+        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+      }
+
+      // 3. オンラインステータス
+      match /status/{userId} {
+        allow read: if isAllowedUser(appId);
+        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+      }
+
+      // 4. チャットルーム
+      match /public/data/rooms/{roomId} {
+        allow read: if isAllowedUser(appId);
+        // ルーム作成時：createdByが自分自身のUIDであることを強制
+        allow create: if isAllowedUser(appId) && request.resource.data.createdBy == request.auth.uid;
+        // ルーム設定（名前やパスワード）の更新は作成者のみ
+        allow update: if isAllowedUser(appId) && resource.data.createdBy == request.auth.uid;
+        // ルームの削除は管理者のみ
+        allow delete: if isAdmin(appId);
+
+        // 5. メッセージ
+        match /messages/{messageId} {
+          allow read: if isAllowedUser(appId);
+          // メッセージ作成時：senderIdが自分自身のUIDであることを強制（なりすまし防止）
+          allow create: if isAllowedUser(appId) && request.resource.data.senderId == request.auth.uid;
+          
+          // 更新の制限：
+          // 「isPinned（ピン留め）」フィールドのみの変更なら、誰でもOK。
+          // それ以外の変更（本文の改ざんなど）は、送信者本人か管理者のみ許可。
+          allow update: if isAllowedUser(appId) && (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned']) 
+            || resource.data.senderId == request.auth.uid 
+            || isAdmin(appId)
+          );
+          
+          // メッセージの削除は、送信者本人か管理者のみ
+          allow delete: if isAllowedUser(appId) && (resource.data.senderId == request.auth.uid || isAdmin(appId));
+        }
+
+        // 6. 既読情報
+        match /readReceipts/{userId} {
+          allow read: if isAllowedUser(appId);
+          // 自分の既読情報のみ本人が更新可能
+          allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+          // ルーム削除時などに備え、管理者は削除可能
+          allow delete: if isAdmin(appId);
+        }
+      }
+    }
+  }
+}

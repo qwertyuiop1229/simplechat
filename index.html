@@ -25,6 +25,18 @@
         box-sizing: border-box;
         background-color: #f3f4f6;
         font-family: "Inter", sans-serif;
+        /* メッセージ入力欄以外での文字選択を無効化 */
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+      }
+      /* 入力フィールドでのみ文字選択を許可 */
+      textarea, input[type="text"], input[type="email"], input[type="password"] {
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
       }
       .container {
         display: flex;
@@ -47,6 +59,7 @@
         border-radius: 1rem;
         margin-bottom: 0.5rem;
         word-wrap: break-word;
+        -webkit-touch-callout: none; /* iOS長押しメニュー防止 */
       }
       .my-message {
         background-color: #e0e0e0; /* 薄いグレー */
@@ -126,7 +139,7 @@
         resize: none;
         min-height: 44px;
         max-height: 200px;
-        background-color: #f3f4f6; /* 薄い灰色 */
+        background-color: #f3f4f6;
         border: 1px solid #e5e7eb;
         
         /* ★スクロールバーを非表示にする設定 */
@@ -139,9 +152,8 @@
       }
       
       textarea#messageInput:focus {
-        /* border-colorの変更を削除し、背景色は維持 */
-        background-color: #f3f4f6; 
-        outline: none; /* デフォルトのアウトラインも削除 */
+        background-color: #f3f4f6;
+        outline: none;
       }
 
       /* 既読表示 */
@@ -160,6 +172,10 @@
       .custom-context-menu {
         position: absolute;
         background-color: white;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
         border: 1px solid #ddd;
         border-radius: 0.5rem;
         box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
@@ -263,6 +279,12 @@
         position: relative;
         flex-shrink: 0;
       }
+      .avatar-placeholder img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 50%;
+      }
       /* ステータスバッジ */
       .status-indicator {
         width: 12px;
@@ -325,7 +347,7 @@
         color: #6b7280;
       }
 
-      /* スマホ対応CSS */
+      /* スマホ対応CSS - LINE風UI */
       @media (max-width: 767px) {
         body { padding: 0; }
         .container {
@@ -334,29 +356,109 @@
           border-radius: 0;
         }
         .container > div { flex-direction: column; }
-        #appContainer { flex-direction: column; }
+        #appContainer { flex-direction: column; position: relative; }
 
-        #sidebar { width: 100% !important; }
+        #sidebar {
+          width: 100% !important;
+          height: 100%;
+          position: absolute;
+          top: 0; left: 0;
+          z-index: 10;
+          background: white;
+        }
         #resizer { display: none; }
         #membersSidebar { display: none; }
 
+        /* サイドバーが非表示時はチャットエリアがフル表示 */
+        #sidebar.mobile-hidden { display: none !important; }
+
         #roomList {
-          height: 30vh;
-          min-height: 150px;
-          max-height: 40vh;
+          flex: 1;
           overflow-y: auto;
-          border-bottom: 1px solid #ddd;
+          border-bottom: none;
         }
         #messagesDisplay {
-          height: calc(100vh - 64px - 64px - 30vh);
-          min-height: 200px;
+          flex: 1;
+          min-height: 0;
         }
-        .my-message, .other-message { max-width: 90%; }
+        .my-message, .other-message { max-width: 85%; }
         
         /* スマホではユーザーパネルを大きく */
         #userPanel {
             padding: 1rem;
         }
+
+        /* スマホ用の戻るボタン */
+        #mobileBackButton {
+          display: flex !important;
+        }
+
+        /* スマホで入力欄を画面下部に固定 */
+        #messageInputArea {
+          border-top: 1px solid #e5e7eb;
+        }
+
+        /* iPhoneでの勝手なズーム拡大を防止 */
+        input, textarea, select {
+          font-size: 16px !important;
+        }
+
+        /* メンバー一覧のボトムシート対応 */
+        #bottomSheetOverlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background-color: rgba(0,0,0,0.5);
+          z-index: 40;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        #bottomSheetOverlay.show {
+          display: block;
+          opacity: 1;
+        }
+
+        #membersSidebar {
+          display: flex !important; /* Tailwindの hidden md:flex を上書き */
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          height: 70vh;
+          background-color: white;
+          z-index: 50;
+          border-radius: 1rem 1rem 0 0;
+          box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+          transform: translateY(100%);
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          flex-direction: column;
+          border-left: none; /* PC用のボーダーを消す */
+        }
+        
+        #membersSidebar.bottom-sheet-open {
+          transform: translateY(0);
+        }
+
+        /* ボトムシートのドラッグハンドル */
+        #bottomSheetHandle {
+          display: flex;
+          justify-content: center;
+          padding: 12px 0;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        #bottomSheetHandle::after {
+          content: "";
+          width: 40px;
+          height: 5px;
+          background-color: #d1d5db;
+          border-radius: 3px;
+        }
+      }
+      @media (min-width: 768px) {
+        #mobileBackButton { display: none !important; }
+        #bottomSheetOverlay { display: none !important; }
+        #bottomSheetHandle { display: none !important; }
       }
 
       /* 強制上書き */
@@ -375,6 +477,131 @@
         padding: 0 !important;
         border-radius: 0 !important;
         box-shadow: none !important;
+      }
+      /* --- 追加機能用スタイル --- */
+      /* メンションのハイライト */
+      .mention-highlight {
+        background-color: #fef08a !important;
+        border: 1px solid #eab308;
+      }
+      .mention-text {
+        color: #1d4ed8;
+        font-weight: bold;
+      }
+      /* ピン留めエリア */
+      #pinnedMessagesArea {
+        border-bottom: 2px solid #e5e7eb;
+        background-color: #f8fafc;
+        padding: 0.5rem;
+        max-height: 120px;
+        overflow-y: auto;
+      }
+      .pinned-message-item {
+        font-size: 0.8rem;
+        padding: 6px;
+        background: white;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        border-left: 4px solid #f59e0b;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      }
+      .pinned-message-item:hover { background-color: #f1f5f9; }
+      /* 未読バッジ */
+      .unread-badge {
+        background-color: #ef4444;
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 700;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        margin-left: 6px;
+        flex-shrink: 0;
+      }
+      /* 検索バー */
+      #searchContainer {
+        padding: 0.5rem;
+        background: #f3f4f6;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      #searchContainer input {
+        background-color: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        color: #374151;
+        font-size: 16px; /* スマホでの自動拡大防止のため16pxに固定 */
+        padding: 0.5rem 0.75rem;
+      }
+      #searchContainer input:focus {
+        border-color: #9ca3af;
+        outline: none;
+      }
+      /* ドラッグ＆ドロップオーバーレイ */
+      #dropOverlay {
+        position: absolute;
+        inset: 0;
+        background-color: rgba(255, 255, 255, 0.92);
+        border: 2px dashed #000;
+        z-index: 20;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      #dropOverlay.active {
+        display: flex;
+      }
+      /* 入力欄アクションボタン */
+      .input-action-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #888;
+        font-size: 1rem;
+        padding: 6px 8px;
+        border-radius: 4px;
+        transition: color 0.15s, background-color 0.15s;
+      }
+      .input-action-btn:hover:not(:disabled) {
+        color: #000;
+        background-color: #f0f0f0;
+      }
+      .input-action-btn:disabled {
+        color: #ccc;
+        cursor: not-allowed;
+      }
+      /* メンションポップアップ */
+      #mentionPopup {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        max-height: 180px;
+        overflow-y: auto;
+        z-index: 30;
+        width: 220px;
+        margin-bottom: 8px;
+      }
+      #mentionPopup .mention-option {
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: #374151;
+        border-bottom: 1px solid #f3f4f6;
+        transition: background-color 0.2s;
+      }
+      #mentionPopup .mention-option:last-child {
+        border-bottom: none;
+      }
+      #mentionPopup .mention-option:hover {
+        background-color: #f3f4f6;
       }
     </style>
   </head>
@@ -414,31 +641,31 @@
         class="flex flex-1 overflow-hidden flex-col md:flex-row"
       >
         <!-- 認証フォーム -->
-        <div
-          id="authContainer"
-          class="flex-1 flex flex-col items-center justify-center p-8 hidden w-full"
-        >
-          <h2 class="text-3xl font-bold mb-6 text-gray-800">ログイン</h2>
-          <div class="w-full max-w-md">
-            <input
-              type="email"
-              id="emailInput"
-              placeholder="メールアドレス"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <input
-              type="password"
-              id="passwordInput"
-              placeholder="パスワード"
-              class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <button
-              id="authButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-4"
-            >
-              ログイン
-            </button>
-            <div id="authMessage" class="text-red-600 text-center mt-4"></div>
+        <div id="authContainer" class="flex-1 flex flex-col items-center justify-center p-4 md:p-8 hidden w-full">
+          <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+            
+            <!-- タブ -->
+            <div class="flex mb-6 border-b border-gray-300">
+              <button id="tabLogin" class="flex-1 pb-2 font-bold text-gray-800 border-b-2 border-gray-800 transition-colors">ログイン</button>
+              <button id="tabSignup" class="flex-1 pb-2 font-bold text-gray-400 border-b-2 border-transparent transition-colors">新規登録</button>
+            </div>
+
+            <!-- ログインフォーム -->
+            <div id="loginFormArea">
+              <input type="email" id="emailInput" placeholder="メールアドレス" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none" />
+              <input type="password" id="passwordInput" placeholder="パスワード" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none" />
+              <button id="authButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors duration-200 mb-4">ログイン</button>
+            </div>
+
+            <!-- 新規登録フォーム -->
+            <div id="signupFormArea" class="hidden">
+              <p class="text-sm text-gray-600 mb-4 text-center">※管理者から許可されたメールアドレスのみ登録可能です。</p>
+              <input type="email" id="signupEmailInput" placeholder="許可されたメールアドレス" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none" />
+              <input type="password" id="signupPasswordInput" placeholder="新規パスワードを設定" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none" />
+              <button id="signupButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors duration-200 mb-4">アカウント作成</button>
+            </div>
+
+            <div id="authMessage" class="text-red-600 text-center mt-2"></div>
           </div>
         </div>
 
@@ -490,13 +717,18 @@
             <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">アカウント設定</h2>
             
             <div class="flex flex-col items-center mb-6">
-                <div class="w-20 h-20 rounded-full bg-gray-700 text-white flex items-center justify-center text-3xl font-bold mb-2 relative">
+                <div class="w-20 h-20 rounded-full bg-gray-700 text-white flex items-center justify-center text-3xl font-bold mb-2 relative cursor-pointer" id="avatarUploadTrigger">
                     <span id="settingsAvatarText"></span>
-                    <button class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md">
+                    <img id="settingsAvatarPreview" src="" class="absolute inset-0 w-full h-full object-cover rounded-full hidden" />
+                    <div class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs shadow-md z-10 pointer-events-none border-2 border-white">
                         <i class="fas fa-pencil-alt"></i>
-                    </button>
+                    </div>
+                    <input type="file" id="avatarUploadInput" accept="image/*" class="hidden" />
                 </div>
-                <p class="text-sm text-gray-500">アイコンの変更はまだサポートされていません</p>
+                <p class="text-xs text-gray-500 mt-1">クリックしてアイコンを変更 (100KB以下に自動リサイズ)</p>
+                <button id="resetAvatarButton" class="mt-2 px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-md transition-colors duration-200 hidden">
+                    <i class="fas fa-undo mr-1"></i>アイコンをリセット
+                </button>
             </div>
 
             <div class="mb-6">
@@ -526,7 +758,48 @@
                   保存
                 </button>
             </div>
+            
+            <!-- 管理者設定ボタン (管理者のみ表示) -->
+            <div id="adminPanelContainer" class="border-t pt-4 mt-4 hidden">
+                <button id="openAdminModalButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                    <i class="fas fa-user-shield mr-2"></i>管理者設定を開く
+                </button>
+            </div>
+
             <div id="settingsMessage" class="text-center mt-2 text-sm"></div>
+          </div>
+        </div>
+
+        <!-- 管理者モーダル (Admin Panel) -->
+        <div id="adminModal" class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden">
+          <div class="bg-white p-8 rounded-lg w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
+            <button id="closeAdminModalButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center"><i class="fas fa-shield-alt mr-2"></i>管理者パネル</h2>
+            
+            <div class="mb-6">
+                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">許可リスト（招待されたメールアドレス）</h3>
+                <div class="flex mb-2">
+                    <input type="email" id="newAllowedEmailInput" placeholder="追加するメールアドレス" class="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none" />
+                    <button id="addAllowedEmailButton" class="bg-gray-800 hover:bg-gray-700 text-white px-4 rounded-r-lg font-bold transition-colors">追加</button>
+                </div>
+                <div id="allowedEmailsList" class="bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
+                    <!-- 動的に追加 -->
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">管理者リスト</h3>
+                <div class="flex mb-2">
+                    <input type="email" id="newAdminEmailInput" placeholder="管理者にするメールアドレス" class="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none" />
+                    <button id="addAdminEmailButton" class="bg-gray-800 hover:bg-gray-700 text-white px-4 rounded-r-lg font-bold transition-colors">追加</button>
+                </div>
+                <div id="adminEmailsList" class="bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
+                    <!-- 動的に追加 -->
+                </div>
+            </div>
+            <div id="adminMessage" class="text-center text-sm font-bold mt-2"></div>
           </div>
         </div>
 
@@ -734,8 +1007,18 @@
           <div class="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
             <div
               id="currentRoomHeader"
-              class="bg-gray-200 p-3 border-b border-gray-300 text-center font-semibold text-gray-800 text-lg hidden flex-shrink-0"
-            ></div>
+              class="bg-gray-200 p-3 border-b border-gray-300 text-center font-semibold text-gray-800 text-lg hidden flex-shrink-0 flex justify-between items-center"
+            >
+              <button id="mobileBackButton" class="text-gray-600 hover:text-gray-800 hidden items-center p-3 -ml-3 mr-1 rounded-full" style="display:none;"><i class="fas fa-arrow-left"></i></button>
+              <span id="currentRoomTitleText" class="flex-1"></span>
+              <button id="toggleSearchButton" class="text-gray-500 hover:text-gray-800 ml-2"><i class="fas fa-search"></i></button>
+            </div>
+            <div id="searchContainer" class="hidden flex-shrink-0 flex items-center">
+              <input type="text" id="searchInput" placeholder="メッセージを検索..." class="flex-1 p-2 text-sm rounded border border-gray-400 focus:outline-none">
+              <button id="closeSearchBtn" class="ml-2 text-gray-500 hover:text-gray-700 w-6 h-6"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="pinnedMessagesArea" class="hidden flex-shrink-0"></div>
+            
             <div
               id="messagesDisplay"
               class="flex-1 scrollable p-4 flex flex-col space-y-2"
@@ -743,11 +1026,15 @@
               <!-- メッセージはここに動的に追加されます -->
             </div>
             
-            <!-- メッセージ入力エリア（デザイン変更） -->
+            <!-- メッセージ入力エリア -->
             <div
               id="messageInputArea"
-              class="p-4 pt-0 flex flex-col items-center bg-white flex-shrink-0"
+              class="p-4 flex flex-col items-center bg-white flex-shrink-0 relative"
             >
+              <!-- ドラッグ＆ドロップオーバーレイ -->
+              <div id="dropOverlay">
+                <span class="text-gray-800 font-bold text-lg">ファイルをドロップして添付</span>
+              </div>
               <!-- リプライUI -->
               <div
                 id="replyingToContainer"
@@ -785,12 +1072,16 @@
                   X
                 </button>
               </div>
-              <div class="w-full">
-                <!-- ★縦位置を調整: mt-1 に設定しています。この数字(mt-0, mt-2など)を変えて調整可能 -->
+              <!-- メンションポップアップ -->
+              <div id="mentionPopup" class="hidden"></div>
+              <div class="w-full flex items-end gap-1">
+                <button id="fileAttachButton" class="input-action-btn" title="ファイルを添付"><i class="fas fa-paperclip"></i></button>
+                <button id="mentionButton" class="input-action-btn" title="メンション"><i class="fas fa-at"></i></button>
+                <input type="file" id="fileAttachInput" class="hidden" />
                 <textarea
                   id="messageInput"
                   placeholder="メッセージを入力"
-                  class="flex-1 p-3 rounded-lg w-full focus:outline-none mt-1"
+                  class="flex-1 p-3 rounded-lg w-full focus:outline-none"
                   rows="1"
                   disabled
                 ></textarea>
@@ -798,8 +1089,10 @@
             </div>
           </div>
 
-          <!-- メンバーリストサイドバー (Discord風) -->
+          <!-- メンバーリストサイドバー (スマホではボトムシート) -->
+          <div id="bottomSheetOverlay"></div>
           <div id="membersSidebar" class="hidden md:flex scrollable">
+            <div id="bottomSheetHandle"></div>
             <div id="membersList" class="p-2 w-full">
               <!-- メンバーはここに動的に追加されます -->
             </div>
@@ -812,6 +1105,7 @@
     <!-- カスタムコンテキストメニュー -->
     <div id="messageContextMenu" class="custom-context-menu hidden">
       <button id="copyMessageButton">コピー</button>
+      <button id="pinMessageButton">ピン留め / 解除</button>
       <button id="deleteMessageButton">削除</button>
     </div>
 
@@ -840,6 +1134,7 @@
         orderBy,
         getDocs,
         writeBatch,
+        limit,
       } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
       // Firebase設定
@@ -877,19 +1172,37 @@
       let roomReadReceipts = {};
       let messagesIndexMap = {};
 
+      // 未読バッジ用
+      let unreadCounts = {};
+      let unreadListeners = {};
+
       let awayTimer = null;
       const AWAY_TIMEOUT = 5 * 60 * 1000;
 
       // ★ メンバーリストのキャッシュと更新用インターバル
       let cachedUsers = [];
       let memberListRefreshInterval = null;
+      let userAvatarUrl = null;
+      let messageLimit = 20;
+      let isScrollingUpLoad = false;
 
       // DOM Elements
       const loadingOverlay = document.getElementById("loadingOverlay");
       const authContainer = document.getElementById("authContainer");
+      
+      const tabLogin = document.getElementById("tabLogin");
+      const tabSignup = document.getElementById("tabSignup");
+      const loginFormArea = document.getElementById("loginFormArea");
+      const signupFormArea = document.getElementById("signupFormArea");
+
       const emailInput = document.getElementById("emailInput");
       const passwordInput = document.getElementById("passwordInput");
       const authButton = document.getElementById("authButton");
+      
+      const signupEmailInput = document.getElementById("signupEmailInput");
+      const signupPasswordInput = document.getElementById("signupPasswordInput");
+      const signupButton = document.getElementById("signupButton");
+      
       const authMessage = document.getElementById("authMessage");
 
       const nicknameContainer = document.getElementById("nicknameContainer");
@@ -908,6 +1221,19 @@
       const logoutButtonInModal = document.getElementById("logoutButtonInModal");
       const settingsMessage = document.getElementById("settingsMessage");
       const settingsAvatarText = document.getElementById("settingsAvatarText");
+      const adminPanelContainer = document.getElementById("adminPanelContainer");
+      const openAdminModalButton = document.getElementById("openAdminModalButton");
+
+      // Admin Modal
+      const adminModal = document.getElementById("adminModal");
+      const closeAdminModalButton = document.getElementById("closeAdminModalButton");
+      const newAllowedEmailInput = document.getElementById("newAllowedEmailInput");
+      const addAllowedEmailButton = document.getElementById("addAllowedEmailButton");
+      const allowedEmailsList = document.getElementById("allowedEmailsList");
+      const newAdminEmailInput = document.getElementById("newAdminEmailInput");
+      const addAdminEmailButton = document.getElementById("addAdminEmailButton");
+      const adminEmailsList = document.getElementById("adminEmailsList");
+      const adminMessage = document.getElementById("adminMessage");
 
       // User Panel
       const userPanel = document.getElementById("userPanel");
@@ -947,6 +1273,8 @@
       
       const membersSidebar = document.getElementById("membersSidebar");
       const membersList = document.getElementById("membersList");
+      const bottomSheetOverlay = document.getElementById("bottomSheetOverlay");
+      const bottomSheetHandle = document.getElementById("bottomSheetHandle");
 
       const currentRoomHeader = document.getElementById("currentRoomHeader");
       const messagesDisplay = document.getElementById("messagesDisplay");
@@ -964,6 +1292,19 @@
       const messageContextMenu = document.getElementById("messageContextMenu");
       const copyMessageButton = document.getElementById("copyMessageButton");
       const deleteMessageButton = document.getElementById("deleteMessageButton");
+      const toggleSearchButton = document.getElementById("toggleSearchButton");
+      const searchContainer = document.getElementById("searchContainer");
+      const searchInput = document.getElementById("searchInput");
+      const closeSearchBtn = document.getElementById("closeSearchBtn");
+      const pinnedMessagesArea = document.getElementById("pinnedMessagesArea");
+      const currentRoomTitleText = document.getElementById("currentRoomTitleText");
+      const pinMessageButton = document.getElementById("pinMessageButton");
+      const mobileBackButton = document.getElementById("mobileBackButton");
+      const sidebar = document.getElementById("sidebar");
+      
+      let searchQuery = "";
+      let isInitialMessageLoad = true;
+      const notificationSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
       let selectedMessageForContext = null;
 
       // =========================================================================
@@ -982,14 +1323,28 @@
 
             if (user) {
               userId = user.uid;
+              userAuthEmail = user.email;
               isAuthReady = true;
 
               try {
-                const idTokenResult = await user.getIdTokenResult(true);
-                isAdmin = idTokenResult.claims.admin === true;
-              } catch (tokenError) {
-                console.error("Token error:", tokenError);
+                // Firestoreの adminList から自身のメールアドレスがあるかチェック
+                const adminDocRef = doc(db, `artifacts/${appId}/settings`, "adminList");
+                const adminSnap = await getDoc(adminDocRef);
+                if (adminSnap.exists() && adminSnap.data().emails) {
+                    isAdmin = adminSnap.data().emails.includes(user.email);
+                } else {
+                    isAdmin = false;
+                }
+              } catch (adminError) {
+                console.error("Admin check error:", adminError);
                 isAdmin = false;
+              }
+
+              // 管理者であれば「管理者設定」ボタンを表示
+              if (isAdmin) {
+                adminPanelContainer.classList.remove("hidden");
+              } else {
+                adminPanelContainer.classList.add("hidden");
               }
 
               const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
@@ -997,6 +1352,7 @@
 
               if (userProfileSnap.exists() && userProfileSnap.data().nickname) {
                 userNickname = userProfileSnap.data().nickname;
+                userAvatarUrl = userProfileSnap.data().avatarUrl || null;
                 
                 // ★ヘッダータイトルの更新
                 headerTitle.textContent = `ニックネーム：${userNickname}${isAdmin ? " (管理者)" : ""}`;
@@ -1039,17 +1395,40 @@
         if(userNickname) {
             userPanelName.textContent = userNickname;
             userPanelId.textContent = `#${userId.substring(0, 4)}`;
-            userPanelAvatar.firstChild.textContent = userNickname.charAt(0).toUpperCase(); 
             
-            if (!userPanelAvatar.querySelector('.status-indicator')) {
+            if (userAvatarUrl) {
+                userPanelAvatar.innerHTML = `<img src="${userAvatarUrl}" class="w-full h-full rounded-full object-cover">`;
+            } else {
                 userPanelAvatar.innerHTML = userNickname.charAt(0).toUpperCase();
-                const stat = document.createElement('div');
-                stat.id = 'userPanelStatus';
-                stat.className = 'status-indicator status-online';
-                userPanelAvatar.appendChild(stat);
             }
+            
+            const stat = document.createElement('div');
+            stat.id = 'userPanelStatus';
+            stat.className = 'status-indicator status-online';
+            userPanelAvatar.appendChild(stat);
         }
       }
+
+      // タブ切り替え処理
+      tabLogin.addEventListener("click", () => {
+          tabLogin.classList.replace("text-gray-400", "text-gray-800");
+          tabLogin.classList.replace("border-transparent", "border-gray-800");
+          tabSignup.classList.replace("text-gray-800", "text-gray-400");
+          tabSignup.classList.replace("border-gray-800", "border-transparent");
+          loginFormArea.classList.remove("hidden");
+          signupFormArea.classList.add("hidden");
+          authMessage.textContent = "";
+      });
+
+      tabSignup.addEventListener("click", () => {
+          tabSignup.classList.replace("text-gray-400", "text-gray-800");
+          tabSignup.classList.replace("border-transparent", "border-gray-800");
+          tabLogin.classList.replace("text-gray-800", "text-gray-400");
+          tabLogin.classList.replace("border-gray-800", "border-transparent");
+          signupFormArea.classList.remove("hidden");
+          loginFormArea.classList.add("hidden");
+          authMessage.textContent = "";
+      });
 
       authButton.addEventListener("click", async () => {
         const email = emailInput.value;
@@ -1065,13 +1444,278 @@
         }
       });
 
+      // サインアップ処理 (Cloudflare Workers API経由)
+      signupButton.addEventListener("click", async () => {
+          const email = signupEmailInput.value;
+          const password = signupPasswordInput.value;
+          authMessage.textContent = "";
+          
+          if (!email || !password) {
+              authMessage.textContent = "メールアドレスとパスワードを入力してください。";
+              return;
+          }
+          if (password.length < 6) {
+              authMessage.textContent = "パスワードは6文字以上で設定してください。";
+              return;
+          }
+
+          loadingOverlay.classList.remove("hidden");
+          try {
+              // Workers API へのリクエスト
+              const apiUrl = "https://simplechat-api.astro-fray-server.workers.dev/api/signup";
+              
+              const res = await fetch(apiUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email, password })
+              });
+              
+              const data = await res.json();
+              
+              if (res.ok) {
+                  // サインアップ成功時はそのままログインを試行
+                  await signInWithEmailAndPassword(auth, email, password);
+              } else {
+                  authMessage.textContent = data.error || "アカウント作成に失敗しました。";
+              }
+          } catch (err) {
+              console.error("Signup error:", err);
+              authMessage.textContent = "通信エラーが発生しました。サーバーが起動していない可能性があります。";
+          } finally {
+              loadingOverlay.classList.add("hidden");
+          }
+      });
+
+      // --- 管理者パネルの処理 ---
+      openAdminModalButton.addEventListener("click", async () => {
+          if (!isAdmin) return;
+          adminMessage.textContent = "読み込み中...";
+          adminModal.classList.remove("hidden");
+          
+          try {
+              // 許可リストと管理者リストを取得
+              const allowedRef = doc(db, `artifacts/${appId}/settings`, "allowedEmails");
+              const adminRef = doc(db, `artifacts/${appId}/settings`, "adminList");
+              
+              const [allowedSnap, adminSnap] = await Promise.all([getDoc(allowedRef), getDoc(adminRef)]);
+              
+              const allowedData = allowedSnap.exists() ? allowedSnap.data().emails || [] : [];
+              const adminData = adminSnap.exists() ? adminSnap.data().emails || [] : [];
+              
+              renderAllowedEmails(allowedData);
+              renderAdminEmails(adminData);
+              adminMessage.textContent = "";
+          } catch (e) {
+              console.error(e);
+              adminMessage.textContent = "データの取得に失敗しました。";
+          }
+      });
+
+      closeAdminModalButton.addEventListener("click", () => {
+          adminModal.classList.add("hidden");
+      });
+
+      function renderAllowedEmails(emails) {
+          allowedEmailsList.innerHTML = "";
+          emails.forEach(e => {
+              const div = document.createElement("div");
+              div.className = "flex justify-between items-center p-2 bg-white rounded border border-gray-100";
+              const span = document.createElement("span");
+              span.textContent = e;
+              span.className = "text-sm text-gray-800";
+              const btn = document.createElement("button");
+              btn.innerHTML = `<i class="fas fa-trash text-red-500"></i>`;
+              btn.className = "hover:bg-red-50 p-1 rounded";
+              btn.onclick = () => removeAllowedEmail(e);
+              div.appendChild(span);
+              div.appendChild(btn);
+              allowedEmailsList.appendChild(div);
+          });
+      }
+
+      function renderAdminEmails(emails) {
+          adminEmailsList.innerHTML = "";
+          emails.forEach(e => {
+              const div = document.createElement("div");
+              div.className = "flex justify-between items-center p-2 bg-white rounded border border-gray-100";
+              const span = document.createElement("span");
+              span.textContent = e;
+              span.className = "text-sm text-gray-800";
+              div.appendChild(span);
+              
+              // 自分自身は削除できないようにする
+              if (e !== userAuthEmail) {
+                  const btn = document.createElement("button");
+                  btn.innerHTML = `<i class="fas fa-trash text-red-500"></i>`;
+                  btn.className = "hover:bg-red-50 p-1 rounded";
+                  btn.onclick = () => removeAdminEmail(e);
+                  div.appendChild(btn);
+              } else {
+                  const b = document.createElement("span");
+                  b.textContent = "(あなた)";
+                  b.className = "text-xs text-gray-400";
+                  div.appendChild(b);
+              }
+              adminEmailsList.appendChild(div);
+          });
+      }
+      // authEmail を保持するための変数
+      let userAuthEmail = "";
+
+      // 許可リストへの追加と削除
+      addAllowedEmailButton.addEventListener("click", async () => {
+          const email = newAllowedEmailInput.value.trim();
+          if (!email) return;
+          adminMessage.textContent = "追加中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");
+              const snap = await getDoc(ref);
+              let emails = snap.exists() ? snap.data().emails || [] : [];
+              if (!emails.includes(email)) {
+                  emails.push(email);
+                  await setDoc(ref, { emails }, { merge: true });
+                  newAllowedEmailInput.value = "";
+                  renderAllowedEmails(emails);
+                  adminMessage.textContent = "追加しました。";
+              } else {
+                  adminMessage.textContent = "すでに追加されています。";
+              }
+          } catch(e) {
+              console.error(e);
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      });
+      
+      async function removeAllowedEmail(email) {
+          if(!confirm(`「${email}」を許可リストから削除しますか？`)) return;
+          adminMessage.textContent = "削除中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");
+              const snap = await getDoc(ref);
+              let emails = snap.exists() ? snap.data().emails || [] : [];
+              emails = emails.filter(e => e !== email);
+              await setDoc(ref, { emails }, { merge: true });
+              renderAllowedEmails(emails);
+              adminMessage.textContent = "削除しました。";
+          } catch(e) {
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      }
+
+      // 管理者リストへの追加と削除
+      addAdminEmailButton.addEventListener("click", async () => {
+          const email = newAdminEmailInput.value.trim();
+          if (!email) return;
+          adminMessage.textContent = "追加中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "adminList");
+              const snap = await getDoc(ref);
+              let emails = snap.exists() ? snap.data().emails || [] : [];
+              if (!emails.includes(email)) {
+                  emails.push(email);
+                  await setDoc(ref, { emails }, { merge: true });
+                  newAdminEmailInput.value = "";
+                  renderAdminEmails(emails);
+                  adminMessage.textContent = "追加しました。";
+              } else {
+                  adminMessage.textContent = "すでに追加されています。";
+              }
+          } catch(e) {
+              console.error(e);
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      });
+
+      async function removeAdminEmail(email) {
+          if(!confirm(`「${email}」を管理者から削除しますか？`)) return;
+          adminMessage.textContent = "削除中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "adminList");
+              const snap = await getDoc(ref);
+              let emails = snap.exists() ? snap.data().emails || [] : [];
+              emails = emails.filter(e => e !== email);
+              await setDoc(ref, { emails }, { merge: true });
+              renderAdminEmails(emails);
+              adminMessage.textContent = "削除しました。";
+          } catch(e) {
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      }
+
+      let pendingAvatarUrl = null;
+      const avatarUploadTrigger = document.getElementById("avatarUploadTrigger");
+      const avatarUploadInput = document.getElementById("avatarUploadInput");
+      const settingsAvatarPreview = document.getElementById("settingsAvatarPreview");
+
+      avatarUploadTrigger.addEventListener("click", () => avatarUploadInput.click());
+      
+      avatarUploadInput.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = function(ev) {
+              const img = new Image();
+              img.onload = function() {
+                  const canvas = document.createElement('canvas');
+                  const size = 150; // 最大サイズ
+                  let width = img.width, height = img.height;
+                  if (width > height) { if (width > size) { height *= size / width; width = size; } }
+                  else { if (height > size) { width *= size / height; height = size; } }
+                  canvas.width = width; canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(img, 0, 0, width, height);
+                  pendingAvatarUrl = canvas.toDataURL('image/jpeg', 0.8); // 圧縮
+                  settingsAvatarPreview.src = pendingAvatarUrl;
+                  settingsAvatarPreview.classList.remove("hidden");
+                  document.getElementById("resetAvatarButton").classList.remove("hidden");
+              };
+              img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
+      });
+
       // Settings Modal Logic
+      const resetAvatarButton = document.getElementById("resetAvatarButton");
+      
       userPanel.addEventListener("click", () => {
         if(!userNickname) return;
         settingsNicknameInput.value = userNickname;
         settingsAvatarText.textContent = userNickname.charAt(0).toUpperCase();
+        pendingAvatarUrl = null;
+        if (userAvatarUrl) {
+            settingsAvatarPreview.src = userAvatarUrl;
+            settingsAvatarPreview.classList.remove("hidden");
+            resetAvatarButton.classList.remove("hidden");
+        } else {
+            settingsAvatarPreview.classList.add("hidden");
+            resetAvatarButton.classList.add("hidden");
+        }
         settingsMessage.textContent = "";
         settingsModal.classList.remove("hidden");
+      });
+
+      // アイコンリセットボタン
+      resetAvatarButton.addEventListener("click", async () => {
+        loadingOverlay.classList.remove("hidden");
+        try {
+            const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+            await updateDoc(userProfileRef, { avatarUrl: null });
+            userAvatarUrl = null;
+            pendingAvatarUrl = null;
+            settingsAvatarPreview.classList.add("hidden");
+            settingsAvatarText.textContent = userNickname.charAt(0).toUpperCase();
+            resetAvatarButton.classList.add("hidden");
+            updateUserPanelUI();
+            await updateUserStatus(document.visibilityState === 'hidden' ? 'offline' : 'online');
+            settingsMessage.textContent = "アイコンをリセットしました";
+            settingsMessage.className = "text-center mt-2 text-sm text-green-600";
+        } catch (e) {
+            console.error(e);
+            settingsMessage.textContent = "リセットに失敗しました";
+            settingsMessage.className = "text-center mt-2 text-sm text-red-600";
+        } finally {
+            loadingOverlay.classList.add("hidden");
+        }
       });
 
       closeSettingsButton.addEventListener("click", () => {
@@ -1095,8 +1739,11 @@
         loadingOverlay.classList.remove("hidden");
         try {
             const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
-            await setDoc(userProfileRef, { nickname: newName, createdAt: serverTimestamp() }, {merge: true});
+            const updateData = { nickname: newName, createdAt: serverTimestamp() };
+            if (pendingAvatarUrl) { updateData.avatarUrl = pendingAvatarUrl; }
+            await setDoc(userProfileRef, updateData, {merge: true});
             userNickname = newName;
+            if (pendingAvatarUrl) { userAvatarUrl = pendingAvatarUrl; }
             
             // ★ヘッダータイトルの更新
             headerTitle.textContent = `${userNickname}${isAdmin ? " (管理者)" : ""}`;
@@ -1237,6 +1884,7 @@
             state: state,
             last_changed: serverTimestamp(),
             nickname: userNickname,
+            avatarUrl: userAvatarUrl || null,
           }, { merge: true });
         } catch (error) {
           console.error("Status update error:", error);
@@ -1285,7 +1933,14 @@
 
             const avatar = document.createElement("div");
             avatar.className = "avatar-placeholder";
-            avatar.textContent = (member.nickname || " ").charAt(0).toUpperCase();
+            if (member.avatarUrl) {
+                const avatarImg = document.createElement("img");
+                avatarImg.src = member.avatarUrl;
+                avatarImg.alt = member.nickname || "";
+                avatar.appendChild(avatarImg);
+            } else {
+                avatar.textContent = (member.nickname || " ").charAt(0).toUpperCase();
+            }
 
             const statusDot = document.createElement("div");
             statusDot.className = `status-indicator status-${member.state || 'offline'}`;
@@ -1345,21 +2000,34 @@
         const roomsQuery = query(collection(db, `artifacts/${appId}/public/data/rooms`));
         onSnapshot(roomsQuery, (snapshot) => {
           roomList.innerHTML = "";
+          // 既存のリスナーを解除し、現在のルームIDを記録
+          const currentRoomIds = new Set();
           snapshot.forEach((doc) => {
+            currentRoomIds.add(doc.id);
             const room = doc.data();
             const div = document.createElement("div");
             div.className = "flex items-center justify-between p-3 mb-2 bg-gray-50 hover:bg-gray-200 rounded-lg cursor-pointer";
+            div.id = `room-item-${doc.id}`;
             div.addEventListener("click", () => handleRoomSelection(doc.id, room.name, room.password));
             
             const nameDiv = document.createElement("div");
             nameDiv.className = "flex-1 truncate";
             nameDiv.textContent = room.name;
             
+            // 未読バッジ
+            const badgeSpan = document.createElement("span");
+            badgeSpan.className = "unread-badge";
+            badgeSpan.id = `unread-badge-${doc.id}`;
+            const count = unreadCounts[doc.id] || 0;
+            badgeSpan.textContent = count > 99 ? "99+" : count;
+            badgeSpan.style.display = (count > 0 && doc.id !== currentRoomId) ? "flex" : "none";
+            
             const dropDiv = document.createElement("div");
             dropDiv.className = "dropdown-container";
             const btn = document.createElement("button");
             btn.textContent = "⋮";
-            btn.className = "text-gray-700 w-6 h-6 hover:bg-gray-200 rounded-full flex items-center justify-center";
+            // 当たり判定を大きくするため w-10 h-10 にしつつ、レイアウトが崩れないようネガティブマージンを入れる
+            btn.className = "text-gray-700 w-10 h-10 text-lg hover:bg-gray-200 rounded-full flex items-center justify-center -mr-2 -my-2";
             btn.onclick = (e) => {
               e.stopPropagation();
               const content = dropDiv.querySelector(".dropdown-content");
@@ -1380,8 +2048,22 @@
             dropDiv.appendChild(content);
 
             div.appendChild(nameDiv);
+            div.appendChild(badgeSpan);
             div.appendChild(dropDiv);
             roomList.appendChild(div);
+            
+            // 未読リスナーを設定
+            if (!unreadListeners[doc.id]) {
+              setupUnreadListener(doc.id);
+            }
+          });
+          // 削除されたルームのリスナーを解除
+          Object.keys(unreadListeners).forEach(rid => {
+            if (!currentRoomIds.has(rid)) {
+              unreadListeners[rid]();
+              delete unreadListeners[rid];
+              delete unreadCounts[rid];
+            }
           });
         });
 
@@ -1392,39 +2074,118 @@
         });
       }
 
+      function setupUnreadListener(roomId) {
+        const q = query(
+          collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/messages`),
+          orderBy("timestamp", "desc"),
+          limit(1)
+        );
+        let isFirst = true;
+        unreadListeners[roomId] = onSnapshot(q, (snapshot) => {
+          if (isFirst) { isFirst = false; return; } // 初回は無視
+          snapshot.docChanges().forEach(change => {
+            if (change.type === "added") {
+              const msgData = change.doc.data();
+              if (roomId !== currentRoomId && msgData.senderId !== userId) {
+                unreadCounts[roomId] = (unreadCounts[roomId] || 0) + 1;
+                updateUnreadBadge(roomId);
+              }
+            }
+          });
+        });
+      }
+
+      function updateUnreadBadge(roomId) {
+        const badge = document.getElementById(`unread-badge-${roomId}`);
+        if (!badge) return;
+        const count = unreadCounts[roomId] || 0;
+        badge.textContent = count > 99 ? "99+" : count;
+        badge.style.display = (count > 0 && roomId !== currentRoomId) ? "flex" : "none";
+      }
+
+      function subscribeToMessages() {
+          if(unsubscribeMessages) unsubscribeMessages();
+          
+          const oldScrollHeight = messagesDisplay.scrollHeight;
+          // 最新のメッセージから limit 件取得するために desc を使用
+          const q = query(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), orderBy("timestamp", "desc"), limit(messageLimit));
+          
+          unsubscribeMessages = onSnapshot(q, (snapshot) => {
+              snapshot.docChanges().forEach(change => {
+                  if(change.type === "added" && !isInitialMessageLoad && !isScrollingUpLoad) {
+                      const msgData = change.doc.data();
+                      if(msgData.senderId !== userId) {
+                          const isMentioned = msgData.text && msgData.text.includes(`@${userNickname}`);
+                          if (!document.hasFocus() || isMentioned) {
+                              showNotification("チャット通知", `${msgData.senderNickname}: ${msgData.text || "画像・ファイルを送信しました"}`);
+                          }
+                      }
+                  }
+              });
+
+              messagesDisplay.innerHTML = "";
+              const newMessages = [];
+              snapshot.forEach(doc => {
+                  const d = doc.data(); d.id = doc.id;
+                  newMessages.push(d);
+              });
+              // 取得したリスト（新しい順）を反転させて、古い順（通常表示）にする
+              lastMessagesData = newMessages.reverse();
+              
+              messagesIndexMap = {};
+              lastMessagesData.forEach((m, i) => messagesIndexMap[m.id] = i);
+              
+              renderPinnedMessages();
+              renderMessagesWithReadReceipts();
+              
+              if (isInitialMessageLoad) {
+                  messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+                  isInitialMessageLoad = false;
+              } else if (isScrollingUpLoad) {
+                  // スクロールで過去を読み込んだ場合、位置をキープする
+                  messagesDisplay.scrollTop = messagesDisplay.scrollHeight - oldScrollHeight;
+                  isScrollingUpLoad = false;
+              }
+              updateReadReceiptForCurrentUser();
+          });
+      }
+
       function selectRoom(roomId, roomName) {
+        // スマホの場合、同じルームをタップしてもチャット画面に遷移（サイドバーを隠す）させる
+        if (window.innerWidth < 768 && currentRoomId === roomId) {
+          sidebar.classList.add("mobile-hidden");
+          currentRoomHeader.classList.remove("hidden");
+          return;
+        }
+        
         if(currentRoomId === roomId) return;
         currentRoomId = roomId;
-        currentRoomHeader.textContent = roomName;
+        currentRoomTitleText.textContent = roomName;
         currentRoomHeader.classList.remove("hidden");
         messagesDisplay.innerHTML = "";
         lastMessagesData = [];
         messageInput.disabled = false;
+        fileAttachButton.disabled = false;
+        mentionButton.disabled = false;
+        messageLimit = 20; // ルームに入り直したらリミットをリセット
         clearAttachedFile();
         cancelReply();
         
-        if(unsubscribeMessages) unsubscribeMessages();
+        // 未読バッジをクリア
+        unreadCounts[roomId] = 0;
+        updateUnreadBadge(roomId);
+
+        // スマホ: サイドバーを隠してチャットを表示
+        if (window.innerWidth < 768) {
+          sidebar.classList.add("mobile-hidden");
+        }
+        
         if(readReceiptsUnsubscribe) readReceiptsUnsubscribe();
 
-        const q = query(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), orderBy("timestamp", "asc"));
-        unsubscribeMessages = onSnapshot(q, (snapshot) => {
-            snapshot.docChanges().forEach(change => {
-                if(change.type === "added" && change.doc.data().senderId !== userId && document.hidden) {
-                    showNotification("新規メッセージ");
-                }
-            });
-            messagesDisplay.innerHTML = "";
-            lastMessagesData = [];
-            snapshot.forEach(doc => {
-                const d = doc.data(); d.id = doc.id;
-                lastMessagesData.push(d);
-            });
-            messagesIndexMap = {};
-            lastMessagesData.forEach((m, i) => messagesIndexMap[m.id] = i);
-            renderMessagesWithReadReceipts();
-            messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
-            updateReadReceiptForCurrentUser();
-        });
+        isInitialMessageLoad = true;
+        isScrollingUpLoad = false;
+        
+        subscribeToMessages();
 
         const rrRef = collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`);
         readReceiptsUnsubscribe = onSnapshot(rrRef, (snap) => {
@@ -1435,6 +2196,15 @@
         
         membersSidebar.classList.remove("hidden");
       }
+
+      // スクロールを検知して過去のメッセージを読み込むリスナー
+      messagesDisplay.addEventListener("scroll", () => {
+          if (messagesDisplay.scrollTop === 0 && lastMessagesData.length >= messageLimit) {
+              messageLimit += 20;
+              isScrollingUpLoad = true;
+              subscribeToMessages();
+          }
+      });
 
       promptCreateRoomButton.addEventListener("click", () => {
          document.getElementById("modalNewRoomNameInput").value = "";
@@ -1514,8 +2284,28 @@
         }
 
         try {
-          await deleteDoc(doc(db, `artifacts/${appId}/public/data/rooms`, roomId));
-          console.log(`Successfully deleted room document ${roomId}.`);
+          const batch = writeBatch(db);
+
+          // 1. messages サブコレクションの全削除
+          const messagesRef = collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/messages`);
+          const messagesSnap = await getDocs(messagesRef);
+          messagesSnap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+
+          // 2. readReceipts サブコレクションの全削除
+          const readReceiptsRef = collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/readReceipts`);
+          const readReceiptsSnap = await getDocs(readReceiptsRef);
+          readReceiptsSnap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+
+          // 3. ルーム本体の削除
+          const roomRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomId);
+          batch.delete(roomRef);
+
+          await batch.commit();
+          console.log(`Successfully deleted room document and all its subcollections for ${roomId}.`);
         } catch (error) {
           console.error("Error during room deletion process:", error);
           throw error;
@@ -1599,10 +2389,103 @@
       clearFileButton.addEventListener("click", clearAttachedFile);
       function clearAttachedFile() { attachedFile = null; updateFilePreview(); }
 
+      // --- ファイル添付ボタン ---
+      const fileAttachButton = document.getElementById("fileAttachButton");
+      const fileAttachInput = document.getElementById("fileAttachInput");
+      fileAttachButton.disabled = true;
+      fileAttachButton.addEventListener("click", () => {
+          if (!currentRoomId) return;
+          fileAttachInput.click();
+      });
+      fileAttachInput.addEventListener("change", (e) => {
+          const f = e.target.files[0];
+          if (!f) return;
+          if (f.size > 1024 * 1024) { alertMessage("ファイルは1MBまでです", "error"); return; }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              attachedFile = { data: ev.target.result, name: f.name, type: f.type, size: f.size };
+              updateFilePreview();
+          };
+          reader.readAsDataURL(f);
+          fileAttachInput.value = "";
+      });
+
+      // --- ドラッグ＆ドロップ ---
+      const dropOverlay = document.getElementById("dropOverlay");
+      const messageInputArea = document.getElementById("messageInputArea");
+      let dragCounter = 0;
+      messageInputArea.addEventListener("dragenter", (e) => {
+          e.preventDefault(); dragCounter++;
+          dropOverlay.classList.add("active");
+      });
+      messageInputArea.addEventListener("dragleave", (e) => {
+          e.preventDefault(); dragCounter--;
+          if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove("active"); }
+      });
+      messageInputArea.addEventListener("dragover", (e) => e.preventDefault());
+      messageInputArea.addEventListener("drop", (e) => {
+          e.preventDefault(); dragCounter = 0;
+          dropOverlay.classList.remove("active");
+          const f = e.dataTransfer.files[0];
+          if (!f) return;
+          if (f.size > 1024 * 1024) { alertMessage("ファイルは1MBまでです", "error"); return; }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              attachedFile = { data: ev.target.result, name: f.name, type: f.type, size: f.size };
+              updateFilePreview();
+          };
+          reader.readAsDataURL(f);
+      });
+
+      // --- メンションボタン ---
+      const mentionButton = document.getElementById("mentionButton");
+      const mentionPopup = document.getElementById("mentionPopup");
+      mentionButton.disabled = true;
+      mentionButton.addEventListener("click", () => {
+          if (!currentRoomId) return;
+          if (!mentionPopup.classList.contains("hidden")) {
+              mentionPopup.classList.add("hidden"); return;
+          }
+          mentionPopup.innerHTML = "";
+          const users = cachedUsers.filter(u => u.id !== userId);
+          if (users.length === 0) {
+              mentionPopup.innerHTML = '<div class="p-2 text-sm text-gray-500">ユーザーがいません</div>';
+          } else {
+              users.forEach(u => {
+                  const opt = document.createElement("div");
+                  opt.className = "mention-option";
+                  opt.textContent = u.nickname || "不明";
+                  opt.addEventListener("click", () => {
+                      const pos = messageInput.selectionStart || messageInput.value.length;
+                      const before = messageInput.value.substring(0, pos);
+                      const after = messageInput.value.substring(pos);
+                      const prefix = (before.length > 0 && !before.endsWith(" ") && !before.endsWith("\n")) ? " " : "";
+                      messageInput.value = before + prefix + "@" + u.nickname + " " + after;
+                      mentionPopup.classList.add("hidden");
+                      messageInput.focus();
+                  });
+                  mentionPopup.appendChild(opt);
+              });
+          }
+          mentionPopup.classList.remove("hidden");
+      });
+      document.addEventListener("click", (e) => {
+          if (!mentionPopup.contains(e.target) && e.target !== mentionButton && !mentionButton.contains(e.target)) {
+              mentionPopup.classList.add("hidden");
+          }
+      });
+
       function escapeHtmlAndLinkUrls(text) {
+        if (!text) return "";
         let escapedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return escapedText.replace(urlRegex, `<a href="$1" target="_blank" rel="noopener noreferrer" style="color: black; text-decoration: underline;">$1</a>`);
+        escapedText = escapedText.replace(urlRegex, `<a href="$1" target="_blank" rel="noopener noreferrer" style="color: black; text-decoration: underline;">$1</a>`);
+        // メンションの置換 (@ユーザー名)
+        const mentionRegex = /@([^\s]+)/g;
+        escapedText = escapedText.replace(mentionRegex, (match, p1) => {
+            return `<span class="mention-text">@${p1}</span>`;
+        });
+        return escapedText;
       }
       
       function displayMessage(message, messageId, readByCount = 0) {
@@ -1634,15 +2517,35 @@
           const messageTextSpan = document.createElement("span");
           messageTextSpan.className = `message-content text-gray-900 ${isMyMessage ? "text-right" : "text-left"}`;
           messageTextSpan.innerHTML = escapeHtmlAndLinkUrls(message.text);
+          // 自分がメンションされていたらハイライト
+          if (message.text.includes(`@${userNickname}`)) {
+              messageElement.classList.add("mention-highlight");
+          }
           messageElement.appendChild(messageTextSpan);
         }
         if (message.fileData && message.fileName) {
-          const fileAttachmentDiv = document.createElement("div");
-          fileAttachmentDiv.className = `mt-2 p-2 rounded-lg border border-gray-300 ${isMyMessage ? "bg-gray-200" : "bg-gray-100"} flex items-center space-x-2 cursor-pointer`;
-          fileAttachmentDiv.style.color = "#333";
-          fileAttachmentDiv.innerHTML = `<span class="flex-1 text-sm font-semibold truncate">${message.fileName}</span><span>▼</span>`;
-          fileAttachmentDiv.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
-          messageElement.appendChild(fileAttachmentDiv);
+          if (message.fileType && message.fileType.startsWith('image/')) {
+              const img = document.createElement('img');
+              img.src = message.fileData;
+              img.className = 'mt-2 rounded-lg max-w-full h-auto cursor-pointer object-contain';
+              img.style.maxHeight = '250px';
+              img.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
+              messageElement.appendChild(img);
+          } else if (message.fileType && message.fileType.startsWith('video/')) {
+              const video = document.createElement('video');
+              video.src = message.fileData;
+              video.controls = true;
+              video.className = 'mt-2 rounded-lg max-w-full h-auto';
+              video.style.maxHeight = '250px';
+              messageElement.appendChild(video);
+          } else {
+              const fileAttachmentDiv = document.createElement("div");
+              fileAttachmentDiv.className = `mt-2 p-2 rounded-lg border border-gray-300 ${isMyMessage ? "bg-gray-200" : "bg-gray-100"} flex items-center space-x-2 cursor-pointer`;
+              fileAttachmentDiv.style.color = "#333";
+              fileAttachmentDiv.innerHTML = `<span class="flex-1 text-sm font-semibold truncate">${message.fileName}</span><span>▼</span>`;
+              fileAttachmentDiv.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
+              messageElement.appendChild(fileAttachmentDiv);
+          }
         }
         const timestampSpan = document.createElement("span");
         timestampSpan.className = `text-xs text-gray-500 mt-1 ${isMyMessage ? "text-right" : "text-left"}`;
@@ -1670,11 +2573,21 @@
       function renderMessagesWithReadReceipts() {
         const isScrolledToBottom = messagesDisplay.scrollHeight - messagesDisplay.clientHeight <= messagesDisplay.scrollTop + 1;
         messagesDisplay.innerHTML = "";
-        lastMessagesData.forEach((msg, idx) => {
+        
+        const filteredMessages = lastMessagesData.filter(msg => {
+            if (!searchQuery) return true;
+            return (msg.text && msg.text.toLowerCase().includes(searchQuery)) || 
+                   (msg.senderNickname && msg.senderNickname.toLowerCase().includes(searchQuery));
+        });
+
+        filteredMessages.forEach((msg) => {
+          const idx = messagesIndexMap[msg.id];
           const readCount = computeReadByCount(msg, idx);
           displayMessage(msg, msg.id, readCount);
         });
-        if (isScrolledToBottom) {
+        
+        // 検索中でなければ、一番下までスクロールを維持
+        if (isScrolledToBottom && !searchQuery) {
           messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
         }
       }
@@ -1701,16 +2614,57 @@
       document.addEventListener("visibilitychange", () => { if (!document.hidden) updateReadReceiptForCurrentUser(); });
       window.addEventListener("focus", updateReadReceiptForCurrentUser);
 
+      let longPressTimer;
+      messagesDisplay.addEventListener("touchstart", (e) => {
+          const bubble = e.target.closest(".message-bubble");
+          if (!bubble) return;
+          const touch = e.touches[0];
+          const clientX = touch.clientX;
+          const clientY = touch.clientY;
+          
+          longPressTimer = setTimeout(() => {
+              showContextMenu(bubble, clientX, clientY);
+              // 長押し時にテキスト選択を解除して、選択UIが邪魔しないようにする
+              if (window.getSelection) {
+                  window.getSelection().removeAllRanges();
+              }
+          }, 600);
+      }, { passive: true });
+
+      messagesDisplay.addEventListener("touchend", () => clearTimeout(longPressTimer));
+      messagesDisplay.addEventListener("touchmove", () => clearTimeout(longPressTimer));
+      messagesDisplay.addEventListener("touchcancel", () => clearTimeout(longPressTimer));
+
+      function showContextMenu(bubble, clientX, clientY) {
+          const msgData = lastMessagesData.find(m => m.id === bubble.dataset.messageId);
+          if(!msgData) return;
+          selectedMessageForContext = msgData;
+          
+          messageContextMenu.classList.remove("hidden");
+          
+          let menuWidth = messageContextMenu.offsetWidth;
+          let menuHeight = messageContextMenu.offsetHeight;
+          
+          let left = clientX;
+          let top = clientY;
+          
+          // 画面外に見切れないように位置を調整
+          if (left + menuWidth > window.innerWidth) {
+              left = window.innerWidth - menuWidth - 5;
+          }
+          if (top + menuHeight > window.innerHeight) {
+              top = window.innerHeight - menuHeight - 5;
+          }
+          
+          messageContextMenu.style.left = `${left}px`;
+          messageContextMenu.style.top = `${top}px`;
+      }
+
       messagesDisplay.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           const bubble = e.target.closest(".message-bubble");
           if(bubble) {
-              const msgData = lastMessagesData.find(m => m.id === bubble.dataset.messageId);
-              if(!msgData) return;
-              selectedMessageForContext = msgData;
-              messageContextMenu.style.left = `${e.clientX}px`;
-              messageContextMenu.style.top = `${e.clientY}px`;
-              messageContextMenu.classList.remove("hidden");
+              showContextMenu(bubble, e.clientX, e.clientY);
           } else {
               messageContextMenu.classList.add("hidden");
           }
@@ -1782,7 +2736,6 @@
 
       function alertMessage(msg, type="info") {
           const box = document.createElement("div");
-          // ★ 通知ログの配色変更: success時は薄い灰色(bg-gray-200)に濃い文字(text-gray-800)
           let colorClass = "bg-gray-800 text-white";
           if (type === "error") colorClass = "bg-red-600 text-white";
           else if (type === "success") colorClass = "bg-gray-200 text-gray-800 border border-gray-300";
@@ -1793,13 +2746,161 @@
           setTimeout(()=>box.remove(), 3000);
       }
 
-      function showNotification(msg) {
+      function showNotification(title, bodyText) {
+          if (document.hasFocus()) return; // 画面を見ている時は鳴らさない
+          
+          // 音を鳴らす（ブラウザの自動再生ポリシーでブロックされる可能性はあるが最善を尽くす）
+          notificationSound.play().catch(e => console.log("Sound play blocked", e));
+
           if(Notification.permission === "granted") {
-              const n = new Notification("Chat App", { body: msg, silent: true });
-              n.onclick = () => { window.focus(); n.close(); };
+              try {
+                  const n = new Notification(title, { body: bodyText, silent: true });
+                  n.onclick = () => { window.focus(); n.close(); };
+              } catch (e) {
+                  console.error("Notification error:", e);
+              }
           }
       }
       
+      // --- 検索機能 ---
+      toggleSearchButton.addEventListener("click", () => {
+          searchContainer.classList.toggle("hidden");
+          if (!searchContainer.classList.contains("hidden")) {
+            searchInput.focus();
+            // 検索開始時は全メッセージを読み込む
+            messageLimit = 9999;
+            subscribeToMessages();
+          } else {
+            searchQuery = ""; searchInput.value = "";
+            // 検索終了時は通常の20件に戻す
+            messageLimit = 20;
+            subscribeToMessages();
+          }
+      });
+      closeSearchBtn.addEventListener("click", () => {
+          searchContainer.classList.add("hidden");
+          searchQuery = ""; searchInput.value = "";
+          // 通常の20件に戻す
+          messageLimit = 20;
+          subscribeToMessages();
+      });
+      searchInput.addEventListener("input", (e) => {
+          searchQuery = e.target.value.toLowerCase();
+          renderMessagesWithReadReceipts();
+      });
+
+      // --- スマホ用戻るボタン ---
+      mobileBackButton.addEventListener("click", () => {
+          sidebar.classList.remove("mobile-hidden");
+          currentRoomHeader.classList.add("hidden");
+          
+          // ルーム退出処理（開いている判定を解除する）
+          currentRoomId = null;
+          if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null; }
+          if (readReceiptsUnsubscribe) { readReceiptsUnsubscribe(); readReceiptsUnsubscribe = null; }
+          messagesDisplay.innerHTML = "";
+          lastMessagesData = [];
+          messageInput.disabled = true;
+          fileAttachButton.disabled = true;
+          mentionButton.disabled = true;
+          clearAttachedFile();
+          cancelReply();
+      });
+
+      // --- スマホ用メンバー一覧（ボトムシート） ---
+      function openBottomSheet() {
+          if (window.innerWidth >= 768) return; // PCでは何もしない
+          bottomSheetOverlay.classList.add("show");
+          membersSidebar.classList.add("bottom-sheet-open");
+          membersSidebar.style.transform = ""; // JSのインラインスタイルをリセット
+      }
+      
+      function closeBottomSheet() {
+          bottomSheetOverlay.classList.remove("show");
+          membersSidebar.classList.remove("bottom-sheet-open");
+          membersSidebar.style.transform = "";
+      }
+
+      currentRoomTitleText.addEventListener("click", openBottomSheet);
+      bottomSheetOverlay.addEventListener("click", closeBottomSheet);
+
+      // スワイプダウンで閉じる処理
+      let touchStartY = 0;
+      let touchCurrentY = 0;
+      let isDraggingSheet = false;
+
+      membersSidebar.addEventListener("touchstart", (e) => {
+          if (window.innerWidth >= 768) return;
+          // メンバーリストが一番上にある時だけスワイプを検知
+          if (membersList.scrollTop === 0) {
+              touchStartY = e.touches[0].clientY;
+              isDraggingSheet = true;
+              membersSidebar.style.transition = "none"; // ドラッグ中はアニメーションを切る
+          }
+      }, { passive: true });
+
+      membersSidebar.addEventListener("touchmove", (e) => {
+          if (!isDraggingSheet) return;
+          touchCurrentY = e.touches[0].clientY;
+          const deltaY = touchCurrentY - touchStartY;
+          if (deltaY > 0) {
+              // 下に引っ張っている時
+              membersSidebar.style.transform = `translateY(${deltaY}px)`;
+          }
+      }, { passive: true });
+
+      membersSidebar.addEventListener("touchend", () => {
+          if (!isDraggingSheet) return;
+          isDraggingSheet = false;
+          membersSidebar.style.transition = "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)";
+          
+          const deltaY = touchCurrentY - touchStartY;
+          if (deltaY > 100) {
+              // 100px以上下にスワイプしたら閉じる
+              closeBottomSheet();
+          } else {
+              // 元に戻す
+              membersSidebar.style.transform = "translateY(0)";
+          }
+          touchStartY = 0;
+          touchCurrentY = 0;
+      });
+
+      // --- ピン留め機能 ---
+      pinMessageButton.addEventListener("click", async () => {
+          if(selectedMessageForContext) {
+              const msgRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`, selectedMessageForContext.id);
+              const isPinned = !selectedMessageForContext.isPinned;
+              await updateDoc(msgRef, { isPinned: isPinned }, { merge: true });
+              alertMessage(isPinned ? "ピン留めしました" : "ピン留めを解除しました", "success");
+          }
+          messageContextMenu.classList.add("hidden");
+      });
+
+      function renderPinnedMessages() {
+          const pinnedMessages = lastMessagesData.filter(m => m.isPinned);
+          if (pinnedMessages.length > 0) {
+              pinnedMessagesArea.innerHTML = '<div class="text-xs font-bold text-gray-500 mb-1"><i class="fas fa-thumbtack mr-1"></i>ピン留めされたメッセージ</div>';
+              pinnedMessages.forEach(msg => {
+                  const div = document.createElement("div");
+                  div.className = "pinned-message-item truncate";
+                  div.innerHTML = `<span class="font-bold mr-2 text-gray-800">${msg.senderNickname}:</span><span class="text-gray-600">${msg.text || (msg.fileType?.startsWith('image') ? "画像" : "ファイル")}</span>`;
+                  div.addEventListener("click", () => {
+                      const el = messagesDisplay.querySelector(`.message-bubble[data-message-id="${msg.id}"]`);
+                      if(el) {
+                          el.scrollIntoView({behavior:"smooth", block:"center"});
+                          el.classList.add("message-highlight");
+                          setTimeout(()=>el.classList.remove("message-highlight"), 1200);
+                      }
+                  });
+                  pinnedMessagesArea.appendChild(div);
+              });
+              pinnedMessagesArea.classList.remove("hidden");
+          } else {
+              pinnedMessagesArea.classList.add("hidden");
+          }
+      }
+
       // =========================================================================
       // Keyboard Shortcuts (Enter for Confirm, Shift for Cancel) - ★追加
       // =========================================================================
