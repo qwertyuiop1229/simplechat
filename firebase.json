@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": ".",
+    "public": "public",
     "predeploy": [
       "npm --prefix server run deploy"
     ],
