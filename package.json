@@ -1,0 +1,24 @@
+{
+  "name": "simplechat",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qwertyuiop1229/simplechat.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/qwertyuiop1229/simplechat/issues"
+  },
+  "homepage": "https://github.com/qwertyuiop1229/simplechat#readme",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1"
+  }
+}

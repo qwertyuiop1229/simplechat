@@ -2746,22 +2746,7 @@
           setTimeout(()=>box.remove(), 3000);
       }
 
-      function showNotification(title, bodyText) {
-          if (document.hasFocus()) return; // 画面を見ている時は鳴らさない
-          
-          // 音を鳴らす（ブラウザの自動再生ポリシーでブロックされる可能性はあるが最善を尽くす）
-          notificationSound.play().catch(e => console.log("Sound play blocked", e));
 
-          if(Notification.permission === "granted") {
-              try {
-                  const n = new Notification(title, { body: bodyText, silent: true });
-                  n.onclick = () => { window.focus(); n.close(); };
-              } catch (e) {
-                  console.error("Notification error:", e);
-              }
-          }
-      }
-      
       // --- 検索機能 ---
       toggleSearchButton.addEventListener("click", () => {
           searchContainer.classList.toggle("hidden");
@@ -2991,12 +2976,61 @@
       }
 
       // =========================================================================
+      // Tauri Native Features (Notifications & Updater)
+      // =========================================================================
+      const isTauri = window.__TAURI__ !== undefined;
+
+      async function showNotification(title, body) {
+        if (isTauri && window.__TAURI__.notification) {
+          let permissionGranted = await window.__TAURI__.notification.isPermissionGranted();
+          if (!permissionGranted) {
+            const permission = await window.__TAURI__.notification.requestPermission();
+            permissionGranted = permission === 'granted';
+          }
+          if (permissionGranted) {
+            window.__TAURI__.notification.sendNotification({ title: title, body: body });
+          }
+        } else if ("Notification" in window) {
+          if (Notification.permission === "granted") {
+            new Notification(title, { body: body });
+          } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+              if (permission === "granted") {
+                new Notification(title, { body: body });
+              }
+            });
+          }
+        }
+      }
+
+      async function checkForUpdates() {
+        if (!isTauri || !window.__TAURI__.updater) return;
+        try {
+          const update = await window.__TAURI__.updater.check();
+          if (update) {
+            const confirmed = window.confirm(
+              `新しいバージョン (${update.version}) が利用可能です。\n\nリリースノート:\n${update.body}\n\n今すぐアップデートして再起動しますか？`
+            );
+            if (confirmed) {
+              await update.downloadAndInstall();
+              // Tauri v2 restart logic might require process plugin, but we can also use window.location.reload or typical rust restart. 
+              // Better use the built-in restart if possible, or tell user to restart.
+              alert("アップデートが完了しました。アプリを再起動してください。");
+            }
+          }
+        } catch (error) {
+          console.error("アップデートの確認に失敗しました:", error);
+        }
+      }
+
+      // =========================================================================
       // Application Startup
       // =========================================================================
       window.onload = () => {
           loadingOverlay.classList.remove("hidden");
           initializeFirebase();
           if("Notification" in window) Notification.requestPermission();
+          if (isTauri) checkForUpdates();
           initializeResizer(); // ★追加
       };
     </script>
