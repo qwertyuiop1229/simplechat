@@ -40,7 +40,12 @@ service cloud.firestore {
         allow write: if isAdmin(appId);
       }
 
-      // 2. ユーザープロフィール（ニックネーム・アイコン）
+      // 2. ユーザープロフィール（ニックネーム・アイコン、およびFCMトークン等）
+      match /users/{userId} {
+        allow read: if isAllowedUser(appId);
+        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+      }
+      
       match /users/{userId}/profile/nicknameDoc {
         // 他の人のアイコンも表示するため、読み取りは許可リストユーザーのみ
         allow read: if isAllowedUser(appId);
@@ -56,23 +61,43 @@ service cloud.firestore {
 
       // 4. チャットルーム
       match /public/data/rooms/{roomId} {
+        // ルーム一覧は全員が取得できるようにするため、readは許可
         allow read: if isAllowedUser(appId);
         // ルーム作成時：createdByが自分自身のUIDであることを強制
         allow create: if isAllowedUser(appId) && request.resource.data.createdBy == request.auth.uid;
-        // ルーム設定（名前やパスワード）の更新は作成者のみ
+        // ルーム設定（名前やパスワード有無、参加者リスト）の更新は作成者かCloudflareWorker(Admin)のみ
+        // ただしクライアントからは基本変更させない（Worker経由のみなど）か、作成者のみとする
         allow update: if isAllowedUser(appId) && resource.data.createdBy == request.auth.uid;
         // ルームの削除は管理者のみ
         allow delete: if isAdmin(appId);
 
-        // 5. メッセージ
+        // 5. シークレット情報（パスワード本体）
+        match /secrets/{docId} {
+          // Worker等の管理者アカウントのみ読み取り可能
+          allow read: if isAdmin(appId);
+          // 作成は許可
+          allow create: if isAllowedUser(appId);
+          allow update: if isAllowedUser(appId);
+          allow delete: if isAdmin(appId);
+        }
+
+        // 6. メッセージ
         match /messages/{messageId} {
-          allow read: if isAllowedUser(appId);
-          // メッセージ作成時：senderIdが自分自身のUIDであることを強制（なりすまし防止）
-          allow create: if isAllowedUser(appId) && request.resource.data.senderId == request.auth.uid;
+          // パスワードなしのルーム、または自分が参加済み（joinedUsersに含まれる）、または管理者のみ読み取り可能
+          allow read: if isAllowedUser(appId) && (
+            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
+            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
+            || isAdmin(appId)
+          );
+          
+          // メッセージ作成時：senderIdが自分自身のUIDであることを強制し、かつルームを読める権限があること
+          allow create: if isAllowedUser(appId) && request.resource.data.senderId == request.auth.uid && (
+            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
+            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
+            || isAdmin(appId)
+          );
           
           // 更新の制限：
-          // 「isPinned（ピン留め）」フィールドのみの変更なら、誰でもOK。
-          // それ以外の変更（本文の改ざんなど）は、送信者本人か管理者のみ許可。
           allow update: if isAllowedUser(appId) && (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned']) 
             || resource.data.senderId == request.auth.uid 
@@ -83,9 +108,14 @@ service cloud.firestore {
           allow delete: if isAllowedUser(appId) && (resource.data.senderId == request.auth.uid || isAdmin(appId));
         }
 
-        // 6. 既読情報
+        // 7. 既読情報
         match /readReceipts/{userId} {
-          allow read: if isAllowedUser(appId);
+          // 同じく参加者のみ読み取り可能
+          allow read: if isAllowedUser(appId) && (
+            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
+            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
+            || isAdmin(appId)
+          );
           // 自分の既読情報のみ本人が更新可能
           allow write: if isAllowedUser(appId) && request.auth.uid == userId;
           // ルーム削除時などに備え、管理者は削除可能

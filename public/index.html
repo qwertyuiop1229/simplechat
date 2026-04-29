@@ -6,6 +6,11 @@
     <title>Chat App</title>
     <!-- ここにnoindexメタタグを追加してGoogle検索からのインデックス登録を防ぎます -->
     <meta name="robots" content="noindex, nofollow" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#3b82f6" />
+    <link rel="apple-touch-icon" href="icon-192x192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link
@@ -1135,7 +1140,14 @@
         getDocs,
         writeBatch,
         limit,
+        arrayUnion,
+        arrayRemove,
       } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+      import {
+        getMessaging,
+        getToken,
+        onMessage
+      } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
 
       // Firebase設定
       const firebaseConfig = {
@@ -1153,9 +1165,13 @@
       let app;
       let db;
       let auth;
+      let messaging;
+      let sessionId = crypto.randomUUID();
       let userId = null;
       let userNickname = null;
       let isAdmin = false;
+      const isTauri = window.__TAURI__ !== undefined;
+      
       let currentRoomId = null;
       let unsubscribeMessages = null;
       let unsubscribeUserStatus = null;
@@ -1363,6 +1379,7 @@
                 appContainer.classList.remove("hidden");
                 loadRooms();
                 startPresenceSystem();
+                if (!isTauri) initializeFCM();
               } else {
                 authContainer.classList.add("hidden");
                 appContainer.classList.add("hidden");
@@ -1873,19 +1890,24 @@
 
       async function updateUserStatus(state) {
         if (!userId || !userNickname) return;
-        const statusElement = document.getElementById('userPanelStatus');
-        if(statusElement) {
-            statusElement.className = `status-indicator status-${state}`;
-        }
-
+        
+        let computedState = state;
         const statusRef = doc(db, `artifacts/${appId}/status`, userId);
         try {
-          await setDoc(statusRef, {
-            state: state,
+          let updateData = {
             last_changed: serverTimestamp(),
             nickname: userNickname,
             avatarUrl: userAvatarUrl || null,
-          }, { merge: true });
+            currentRoomId: currentRoomId,
+          };
+          
+          if (state === 'offline') {
+              updateData.activeSessions = arrayRemove(sessionId);
+          } else {
+              updateData.activeSessions = arrayUnion(sessionId);
+              updateData.state = state;
+          }
+          await setDoc(statusRef, updateData, { merge: true });
         } catch (error) {
           console.error("Status update error:", error);
         }
@@ -1911,9 +1933,21 @@
         if (!membersList) return;
         membersList.innerHTML = "";
         
-        const onlineMembers = users.filter(u => u.state === 'online');
-        const awayMembers = users.filter(u => u.state === 'away');
-        const offlineMembers = users.filter(u => u.state !== 'online' && u.state !== 'away');
+        const processedUsers = users.map(u => {
+            const isOnline = u.activeSessions && u.activeSessions.length > 0;
+            const computedState = isOnline ? (u.state || 'online') : 'offline';
+            
+            // update own UI status indicator here
+            if (u.id === userId) {
+                const statusElement = document.getElementById('userPanelStatus');
+                if (statusElement) statusElement.className = `status-indicator status-${computedState}`;
+            }
+            return { ...u, computedState };
+        });
+        
+        const onlineMembers = processedUsers.filter(u => u.computedState === 'online');
+        const awayMembers = processedUsers.filter(u => u.computedState === 'away');
+        const offlineMembers = processedUsers.filter(u => u.computedState === 'offline');
 
         onlineMembers.sort((a, b) => (a.nickname || "").localeCompare(b.nickname || ""));
         awayMembers.sort((a, b) => (a.nickname || "").localeCompare(b.nickname || ""));
@@ -1943,7 +1977,7 @@
             }
 
             const statusDot = document.createElement("div");
-            statusDot.className = `status-indicator status-${member.state || 'offline'}`;
+            statusDot.className = `status-indicator status-${member.computedState}`;
             avatar.appendChild(statusDot);
 
             const info = document.createElement("div");
@@ -2008,7 +2042,8 @@
             const div = document.createElement("div");
             div.className = "flex items-center justify-between p-3 mb-2 bg-gray-50 hover:bg-gray-200 rounded-lg cursor-pointer";
             div.id = `room-item-${doc.id}`;
-            div.addEventListener("click", () => handleRoomSelection(doc.id, room.name, room.password));
+            const isRoomJoined = !room.hasPassword || isAdmin || (room.joinedUsers && room.joinedUsers.includes(userId));
+            div.addEventListener("click", () => handleRoomSelection(doc.id, room.name, room.hasPassword, isRoomJoined));
             
             const nameDiv = document.createElement("div");
             nameDiv.className = "flex-1 truncate";
@@ -2160,6 +2195,7 @@
         
         if(currentRoomId === roomId) return;
         currentRoomId = roomId;
+        updateUserStatus('online'); // Sync room selection for notifications
         currentRoomTitleText.textContent = roomName;
         currentRoomHeader.classList.remove("hidden");
         messagesDisplay.innerHTML = "";
@@ -2219,63 +2255,83 @@
          createRoomPasswordModal.classList.add("hidden");
          try {
              const data = { name, createdAt: serverTimestamp(), createdBy: userId, createdByNickname: userNickname };
-             if(pass) data.password = pass;
-             await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+             
+             let roomRef;
+             if(pass) {
+                 data.hasPassword = true;
+                 data.joinedUsers = [userId]; // Creator is automatically joined
+                 roomRef = await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+                 // 秘密のサブコレクションにパスワードを保存
+                 await setDoc(doc(db, `artifacts/${appId}/public/data/rooms/${roomRef.id}/secrets`, "password"), { password: pass });
+             } else {
+                 roomRef = await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+             }
              alertMessage("ルームを作成しました", "success");
          } catch(e) { console.error(e); }
          finally { loadingOverlay.classList.add("hidden"); }
       });
       cancelCreateRoomButton.addEventListener("click", () => createRoomPasswordModal.classList.add("hidden"));
 
-      function handleRoomSelection(id, name, pass) {
-          if(pass && !isAdmin) {
-              pendingRoomJoin = { roomId: id, roomName: name, correctPassword: pass };
+      function handleRoomSelection(id, name, hasPass, isRoomJoined) {
+          if(hasPass && !isRoomJoined) {
+              pendingRoomJoin = { roomId: id, roomName: name };
               joinRoomPasswordInput.value = "";
               joinRoomTitle.textContent = `${name}に参加`;
               joinRoomPasswordModal.classList.remove("hidden");
+              joinRoomPasswordMessage.textContent = "";
           } else {
               selectRoom(id, name);
           }
       }
-      confirmJoinRoomButton.addEventListener("click", () => {
-          if(joinRoomPasswordInput.value === pendingRoomJoin.correctPassword) {
-              selectRoom(pendingRoomJoin.roomId, pendingRoomJoin.roomName);
-              joinRoomPasswordModal.classList.add("hidden");
-          } else {
-              joinRoomPasswordMessage.textContent = "パスワードが違います";
+
+      confirmJoinRoomButton.addEventListener("click", async () => {
+          const pass = joinRoomPasswordInput.value.trim();
+          if(!pass) return;
+          
+          joinRoomPasswordMessage.textContent = "確認中...";
+          try {
+              // サーバーにパスワード確認を依頼
+              const response = await fetch("https://simplechat-api.astro-fray-server.workers.dev/api/joinRoom", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                      roomId: pendingRoomJoin.roomId,
+                      password: pass,
+                      userId: userId,
+                      appId: appId
+                  })
+              });
+              
+              const result = await response.json();
+              
+              if(response.ok && result.success) {
+                  selectRoom(pendingRoomJoin.roomId, pendingRoomJoin.roomName);
+                  joinRoomPasswordModal.classList.add("hidden");
+              } else {
+                  joinRoomPasswordMessage.textContent = "パスワードが違います";
+              }
+          } catch(e) {
+              console.error(e);
+              joinRoomPasswordMessage.textContent = "エラーが発生しました";
           }
       });
       cancelJoinRoomButton.addEventListener("click", () => joinRoomPasswordModal.classList.add("hidden"));
 
-      function handleDeleteRoomClick(id, name, hasPass, correctPass) {
-          pendingRoomDelete = { roomId: id, roomName: name, hasPassword: hasPass, correctPassword: correctPass };
-          if(hasPass && !isAdmin) {
-              deleteRoomPasswordModal.classList.remove("hidden");
-              document.getElementById("roomToDeletePasswordName").textContent = name;
-              deleteRoomPasswordInput.value = "";
-          } else {
-              deleteRoomConfirmModal.classList.remove("hidden");
-              roomToDeleteNameSpan.textContent = name;
-          }
+      function handleDeleteRoomClick(id, name) {
+          pendingRoomDelete = { roomId: id, roomName: name };
+          deleteRoomConfirmModal.classList.remove("hidden");
+          roomToDeleteNameSpan.textContent = name;
       }
       confirmDeleteButton.addEventListener("click", async () => {
           deleteRoomConfirmModal.classList.add("hidden");
-          await executeDeleteRoom();
+          await deleteRoomAndMessages(pendingRoomDelete.roomId);
       });
       cancelDeleteButton.addEventListener("click", () => deleteRoomConfirmModal.classList.add("hidden"));
-      confirmDeletePasswordButton.addEventListener("click", async () => {
-          if(deleteRoomPasswordInput.value === pendingRoomDelete.correctPassword) {
-              deleteRoomPasswordModal.classList.add("hidden");
-              await executeDeleteRoom();
-          } else {
-              deletePasswordErrorMessage.textContent = "パスワードが違います";
-          }
-      });
-      cancelDeletePasswordButton.addEventListener("click", () => deleteRoomPasswordModal.classList.add("hidden"));
-      
+
       async function deleteRoomAndMessages(roomId) {
         if (currentRoomId === roomId) {
           currentRoomId = null;
+          updateUserStatus('online');
           currentRoomHeader.classList.add("hidden");
           messagesDisplay.innerHTML = "";
           messageInput.disabled = true;
@@ -2339,6 +2395,40 @@
                   data.replyTo = { messageId: replyingToMessage.id, senderNickname: replyingToMessage.senderNickname, text: replyingToMessage.text || "（ファイル）" };
               }
               await addDoc(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), data);
+
+              // 通知を送信
+              try {
+                  const roomDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId));
+                  let receiverIds = [];
+                  if (roomDoc.exists()) {
+                      const roomData = roomDoc.data();
+                      if (roomData.hasPassword && roomData.joinedUsers) {
+                          receiverIds = roomData.joinedUsers;
+                      } else {
+                          // 全てのユーザーを取得
+                          const allUsersSnap = await getDocs(collection(db, `artifacts/${appId}/users`));
+                          receiverIds = allUsersSnap.docs.map(d => d.id);
+                      }
+                  }
+                  
+                  if (receiverIds.length > 0) {
+                      fetch("https://simplechat-api.astro-fray-server.workers.dev/api/sendNotification", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                              receiverIds: receiverIds,
+                              title: `${roomDoc.data()?.name || 'Room'}`,
+                              body: `${userNickname}: ${text || (attachedFile ? '（ファイル）' : '')}`,
+                              roomId: currentRoomId,
+                              appId: appId,
+                              senderId: userId
+                          })
+                      }).catch(e => console.error("Notification trigger error:", e));
+                  }
+              } catch (notifyErr) {
+                  console.error("Failed to trigger notification:", notifyErr);
+              }
+
               messageInput.value = ""; messageInput.style.height="auto";
               clearAttachedFile(); cancelReply();
               
@@ -2938,6 +3028,36 @@
       });
 
       // =========================================================================
+      // FCM Initialization
+      // =========================================================================
+      async function initializeFCM() {
+        if (!messaging) messaging = getMessaging(app);
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === "granted") {
+            const token = await getToken(messaging, { 
+                vapidKey: "BCe5ICJmyyuurq1DsPBXY6AsQcSsIDuXPieZ-c4L1_5zcNwyq2HC3DBhMBND0g9oTwPmEzUhiLqsAjLrnmVlxj0" 
+            });
+            if (token && userId) {
+              const userRef = doc(db, `artifacts/${appId}/users`, userId);
+              await setDoc(userRef, { fcmTokens: arrayUnion(token) }, { merge: true });
+            }
+          }
+          onMessage(messaging, (payload) => {
+            console.log("Foreground message received:", payload);
+            if (payload.notification) {
+                // If the user is active, we don't necessarily show it, but since we rely on 
+                // the worker to NOT send it if active, any received here means we were 
+                // considered offline or in another room by the worker.
+                showNotification(payload.notification.title, payload.notification.body);
+            }
+          });
+        } catch (error) {
+          console.error("FCM Initialization Error:", error);
+        }
+      }
+
+      // =========================================================================
       // Sidebar Resizing Feature - ★改善版に置き換え
       // =========================================================================
       function initializeResizer() {
@@ -2977,8 +3097,6 @@
 
       // =========================================================================
       // Tauri Native Features (Notifications & Updater)
-      // =========================================================================
-      const isTauri = window.__TAURI__ !== undefined;
 
       async function showNotification(title, body) {
         if (isTauri && window.__TAURI__.notification) {
