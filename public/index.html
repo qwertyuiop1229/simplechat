@@ -2167,6 +2167,11 @@
         }
       }
 
+      // Rust側(Tauri)から呼べるようにwindowにエクスポート
+      window.blockingUpdateCheck = blockingUpdateCheck;
+      window.sendOfflineBeacon = sendOfflineBeacon;
+      window.updateUserStatus = updateUserStatus;
+
       function subscribeToUserStatus() {
         if (unsubscribeUserStatus) unsubscribeUserStatus();
         
@@ -3432,8 +3437,19 @@
       // --- 統合通知関数 ---
       async function showNotification(title, body, roomId) {
         if (isTauri) {
-          // Windows版: LINE風カスタムUI通知（最前面・独自UI）
-          showCustomNotification(title, body, roomId);
+          // Tauri版: アプリが非表示の時はOS標準通知、表示中はLINE風通知
+          if (document.visibilityState === 'hidden') {
+            if (window.__TAURI__?.notification) {
+                const { isPermissionGranted, requestPermission, sendNotification } = window.__TAURI__.notification;
+                const granted = await isPermissionGranted();
+                if (!granted) {
+                    await requestPermission();
+                }
+                sendNotification({ title: title, body: body });
+            }
+          } else {
+            showCustomNotification(title, body, roomId);
+          }
         } else if ('Notification' in window) {
           // Web/PWA版: ブラウザ標準通知
           if (Notification.permission === 'granted') {
