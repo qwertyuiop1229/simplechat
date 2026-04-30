@@ -265,10 +265,14 @@ async function handleSendNotification(request, env) {
             
             if (!userData.error && userData.fields && userData.fields.fcmTokens) {
                 const tokens = userData.fields.fcmTokens.arrayValue?.values || [];
+                const invalidTokens = [];
+
                 for (const t of tokens) {
                     const tokenStr = t.stringValue;
                     
-                    // FCM V1 API を叩く
+                    // FCM V1 API: data ペイロードのみ送信（Service Workerでの確実な受信のため）
+                    // notification ペイロードを含めると、ブラウザが自動で通知を出し
+                    // Service Workerの onBackgroundMessage が呼ばれないケースがある
                     const fcmRes = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
                         method: "POST",
                         headers: {
@@ -278,8 +282,55 @@ async function handleSendNotification(request, env) {
                         body: JSON.stringify({
                             message: {
                                 token: tokenStr,
-                                notification: { title, body },
-                                data: { roomId: roomId || "" }
+                                data: {
+                                    title: title,
+                                    body: body,
+                                    roomId: roomId || "",
+                                    senderId: senderId || "",
+                                    type: "chat_message"
+                                },
+                                // Androidの通知チャンネル設定
+                                android: {
+                                    priority: "high",
+                                    notification: {
+                                        title: title,
+                                        body: body,
+                                        channel_id: "simplechat_messages",
+                                        default_sound: true,
+                                        notification_priority: "PRIORITY_HIGH"
+                                    }
+                                },
+                                // Apple Push Notification Service設定
+                                apns: {
+                                    payload: {
+                                        aps: {
+                                            alert: { title: title, body: body },
+                                            sound: "default",
+                                            badge: 1,
+                                            "content-available": 1
+                                        }
+                                    },
+                                    headers: {
+                                        "apns-priority": "10"
+                                    }
+                                },
+                                // Web Push設定
+                                webpush: {
+                                    notification: {
+                                        title: title,
+                                        body: body,
+                                        icon: "/icon-192x192.png",
+                                        badge: "/icon-192x192.png",
+                                        tag: roomId || "simplechat",
+                                        renotify: true
+                                    },
+                                    headers: {
+                                        "Urgency": "high"
+                                    },
+                                    fcm_options: {
+                                        link: "/"
+                                    }
+                                }
                             }
                         })
                     });
@@ -287,9 +338,46 @@ async function handleSendNotification(request, env) {
                     const fcmResult = await fcmRes.json();
                     if (fcmResult.error) {
                         console.error("FCM Send Error:", fcmResult.error);
-                        // もし無効なトークンなら Firestore から削除する処理をここに入れることも可能
+                        // 無効なトークン（UNREGISTERED / NOT_FOUND）は削除対象に追加
+                        const errorCode = fcmResult.error.details?.[0]?.errorCode || fcmResult.error.code;
+                        if (errorCode === 'UNREGISTERED' || errorCode === 404 || 
+                            fcmResult.error.status === 'NOT_FOUND' ||
+                            (fcmResult.error.message && fcmResult.error.message.includes('not a valid FCM'))) {
+                            invalidTokens.push(tokenStr);
+                        }
                     } else {
                         results.push({ token: tokenStr, success: true });
+                    }
+                }
+
+                // 無効なトークンをFirestoreから削除
+                if (invalidTokens.length > 0) {
+                    try {
+                        const removeBody = {
+                            writes: [{
+                                transform: {
+                                    document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/users/${rid}`,
+                                    fieldTransforms: [{
+                                        fieldPath: "fcmTokens",
+                                        removeAllFromArray: {
+                                            values: invalidTokens.map(t => ({ stringValue: t }))
+                                        }
+                                    }]
+                                }
+                            }]
+                        };
+                        const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+                        await fetch(commitUrl, {
+                            method: "POST",
+                            headers: {
+                                "Authorization": `Bearer ${workerToken}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(removeBody)
+                        });
+                        console.log(`Removed ${invalidTokens.length} invalid token(s) for user ${rid}`);
+                    } catch (cleanupErr) {
+                        console.error("Token cleanup error:", cleanupErr);
                     }
                 }
             }

@@ -13,13 +13,58 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
+// バックグラウンドメッセージ処理（data + notification 両対応）
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
-  const notificationTitle = payload.notification.title;
+
+  let title = 'SimpleChat';
+  let body = '新しいメッセージがあります';
+  let data = {};
+
+  if (payload.notification) {
+    title = payload.notification.title || title;
+    body = payload.notification.body || body;
+  }
+  if (payload.data) {
+    title = payload.data.title || title;
+    body = payload.data.body || body;
+    data = payload.data;
+  }
+
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/icon-192x192.png'
+    body: body,
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    tag: data.roomId || 'simplechat-notification',
+    renotify: true,
+    data: data,
+    actions: [
+      { action: 'open', title: '開く' }
+    ]
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  self.registration.showNotification(title, notificationOptions);
+});
+
+// 通知クリック時にアプリを開く
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const roomId = event.notification.data?.roomId;
+  const urlToOpen = self.location.origin + '/index.html' + (roomId ? `?room=${roomId}` : '');
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // 既に開いているタブがあればフォーカス
+      for (const client of clientList) {
+        if (client.url.includes('/index.html') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // なければ新規タブで開く
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
 });
