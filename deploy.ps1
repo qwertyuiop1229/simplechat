@@ -1,6 +1,9 @@
 # SimpleChat Windows Deploy Script
-# Usage: .\deploy.ps1
-# Automatically increments version, tags, and pushes to GitHub
+# Usage: .\deploy.ps1       (Confirm)
+#        .\deploy.ps1 -y    (No Confirm)
+#        npm run deploy     (No Confirm / Auto)
+
+param([switch]$y)
 
 $ErrorActionPreference = "Stop"
 
@@ -10,7 +13,7 @@ Write-Host "  SimpleChat Deploy Script" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. tauri.conf.json からバージョンを読み取り
+# 1. Read version from tauri.conf.json
 $tauriConfPath = Join-Path $PSScriptRoot "src-tauri\tauri.conf.json"
 if (-not (Test-Path $tauriConfPath)) {
     Write-Host "ERROR: tauri.conf.json not found at $tauriConfPath" -ForegroundColor Red
@@ -21,7 +24,7 @@ $tauriConf = Get-Content $tauriConfPath -Raw | ConvertFrom-Json
 $currentVersion = $tauriConf.version
 Write-Host "Current version: $currentVersion" -ForegroundColor Yellow
 
-# 2. セマンティックバージョンのパッチを +1
+# 2. Increment patch version
 $versionParts = $currentVersion.Split(".")
 if ($versionParts.Length -ne 3) {
     Write-Host "ERROR: Invalid version format. Expected x.y.z" -ForegroundColor Red
@@ -39,19 +42,28 @@ Write-Host "New version: $newVersion" -ForegroundColor Green
 Write-Host "Tag name: $tagName" -ForegroundColor Green
 Write-Host ""
 
-# 確認
-$confirm = Read-Host "Deploy v$newVersion? (y/n)"
-if ($confirm -ne "y" -and $confirm -ne "Y") {
-    Write-Host "Deploy cancelled." -ForegroundColor Yellow
-    exit 0
+# Confirm
+if (-not $y) {
+    Write-Host "Deploy v${newVersion}? (y/n): " -ForegroundColor White -NoNewline
+    try {
+        $confirm = [Console]::ReadLine()
+        if ($confirm -ne "y" -and $confirm -ne "Y") {
+            Write-Host "Deploy cancelled." -ForegroundColor Yellow
+            exit 0
+        }
+    } catch {
+        Write-Host "Deploy cancelled. (Non-interactive mode requires -y)" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
-# 3. tauri.conf.json のバージョンを書き換え
+Write-Host "Deploying v$newVersion..." -ForegroundColor Green
+
+# 3. Write new version to tauri.conf.json
 $tauriConfRaw = Get-Content $tauriConfPath -Raw
-$tauriConfRaw = $tauriConfRaw -replace """version"": ""$currentVersion""", """version"": ""$newVersion"""
+$tauriConfRaw = $tauriConfRaw -replace [regex]::Escape("""version"": ""$currentVersion"""), """version"": ""$newVersion"""
 $tauriConfRaw | Set-Content $tauriConfPath -NoNewline
 
-Write-Host ""
 Write-Host "[1/4] Updated tauri.conf.json version to $newVersion" -ForegroundColor Green
 
 # 4. git add -> git commit
