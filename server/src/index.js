@@ -21,6 +21,9 @@ export default {
     if (url.pathname === "/api/sendNotification" && request.method === "POST") {
       return await handleSendNotification(request, env);
     }
+    if (url.pathname === "/api/setOffline" && request.method === "POST") {
+      return await handleSetOffline(request, env);
+    }
 
     return new Response(JSON.stringify({ error: "Not Found" }), {
       status: 404,
@@ -440,4 +443,52 @@ async function getFCMToken(serviceAccountJsonStr) {
   
   const data = await response.json();
   return data.access_token;
+}
+
+// 確実なオフライン状態変更（navigator.sendBeacon用）
+async function handleSetOffline(request, env) {
+  try {
+    const bodyText = await request.text();
+    const data = JSON.parse(bodyText);
+    const { userId, sessionId, appId } = data;
+    
+    if (!userId || !sessionId || !appId) {
+      return new Response("Missing fields", { status: 400, headers: corsHeaders });
+    }
+
+    const workerToken = await getWorkerAuthToken(env);
+    if (!workerToken) return new Response("Worker Auth failed", { status: 500, headers: corsHeaders });
+
+    const projectId = env.FIREBASE_PROJECT_ID;
+
+    // activeSessions から対象の sessionId を削除
+    const removeBody = {
+      writes: [{
+        transform: {
+          document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/status/${userId}`,
+          fieldTransforms: [{
+            fieldPath: "activeSessions",
+            removeAllFromArray: {
+              values: [{ stringValue: sessionId }]
+            }
+          }]
+        }
+      }]
+    };
+    
+    const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+    await fetch(commitUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${workerToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(removeBody)
+    });
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+  } catch (error) {
+    console.error("setOffline Error:", error);
+    return new Response(JSON.stringify({ success: false, error: error.toString() }), { status: 500, headers: corsHeaders });
+  }
 }
