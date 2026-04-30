@@ -36,7 +36,7 @@ $minor = [int]$versionParts[1]
 $patch = [int]$versionParts[2]
 $patch++
 $newVersion = "$major.$minor.$patch"
-$tagName = "app-v$newVersion"
+$tagName = "v$newVersion"
 
 Write-Host "New version: $newVersion" -ForegroundColor Green
 Write-Host "Tag name: $tagName" -ForegroundColor Green
@@ -77,7 +77,7 @@ git tag $tagName
 
 # 6. git push
 Write-Host "[4/4] Pushing to GitHub..." -ForegroundColor Green
-git push origin main --tags
+git push origin HEAD --tags
 
 Write-Host ""
 Write-Host "====================================" -ForegroundColor Cyan
