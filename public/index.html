@@ -718,99 +718,96 @@
       }
       @keyframes spin { to { transform: rotate(360deg); } }
 
-      /* === カスタム通知UI（LINE風） === */
-      #customNotificationContainer {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column-reverse;
-        gap: 10px;
-        pointer-events: none;
-      }
-      .custom-notif {
-        width: 360px;
-        max-width: calc(100vw - 40px);
-        background: white;
-        border-radius: 14px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
-        padding: 16px 18px;
-        display: flex;
-        align-items: flex-start;
-        gap: 12px;
-        pointer-events: auto;
-        cursor: pointer;
-        transform: translateY(120%) scale(0.95);
-        opacity: 0;
-        animation: notifSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        transition: transform 0.3s ease, opacity 0.3s ease;
-        border-left: 4px solid #3b82f6;
-        -webkit-user-select: none;
-        user-select: none;
-      }
-      .custom-notif.dismissing {
-        animation: notifSlideDown 0.35s ease forwards;
-      }
-      @keyframes notifSlideUp {
-        from { transform: translateY(120%) scale(0.95); opacity: 0; }
-        to { transform: translateY(0) scale(1); opacity: 1; }
-      }
-      @keyframes notifSlideDown {
-        from { transform: translateY(0) scale(1); opacity: 1; }
-        to { transform: translateY(120%) scale(0.95); opacity: 0; }
-      }
-      .custom-notif-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
+      /* === 設定トグルスイッチ === */
+      .setting-row {
         display: flex;
         align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 1.1rem;
-        flex-shrink: 0;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #f3f4f6;
       }
-      .custom-notif-content {
-        flex: 1;
-        min-width: 0;
-      }
-      .custom-notif-title {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .custom-notif-body {
-        font-size: 0.8rem;
-        color: #6b7280;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .custom-notif-time {
-        font-size: 0.65rem;
-        color: #9ca3af;
-        margin-top: 4px;
-      }
-      .custom-notif-close {
-        background: none;
-        border: none;
-        color: #9ca3af;
-        font-size: 0.8rem;
-        cursor: pointer;
-        padding: 4px;
-        border-radius: 4px;
-        flex-shrink: 0;
-        transition: color 0.15s, background-color 0.15s;
-      }
-      .custom-notif-close:hover {
+      .setting-row:last-child { border-bottom: none; }
+      .setting-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
         color: #374151;
-        background-color: #f3f4f6;
+      }
+      .setting-label i { width: 18px; text-align: center; color: #6b7280; }
+      .toggle-switch {
+        position: relative;
+        width: 44px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      .toggle-switch input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider {
+        position: absolute;
+        inset: 0;
+        background-color: #d1d5db;
+        border-radius: 24px;
+        cursor: pointer;
+        transition: background-color 0.25s;
+      }
+      .toggle-slider::before {
+        content: "";
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        left: 3px;
+        bottom: 3px;
+        background: white;
+        border-radius: 50%;
+        transition: transform 0.25s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      }
+      .toggle-switch input:checked + .toggle-slider {
+        background-color: #374151;
+      }
+      .toggle-switch input:checked + .toggle-slider::before {
+        transform: translateX(20px);
+      }
+
+      /* === PWAインストールバナー === */
+      #pwaInstallBanner {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 9998;
+        background: linear-gradient(135deg, #1e293b, #334155);
+        color: white;
+        padding: 14px 16px;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+        animation: bannerSlideUp 0.4s ease-out;
+      }
+      #pwaInstallBanner.show { display: flex; }
+      @keyframes bannerSlideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .pwa-banner-icon {
+        width: 40px; height: 40px; border-radius: 10px;
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.2rem; flex-shrink: 0;
+      }
+      .pwa-banner-text { flex: 1; min-width: 0; }
+      .pwa-banner-text strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
+      .pwa-banner-text span { font-size: 0.75rem; color: #94a3b8; }
+      .pwa-banner-btn {
+        background: white; color: #1e293b; border: none; border-radius: 8px;
+        padding: 8px 16px; font-weight: 700; font-size: 0.85rem;
+        cursor: pointer; flex-shrink: 0; transition: opacity 0.2s;
+      }
+      .pwa-banner-btn:hover { opacity: 0.85; }
+      .pwa-banner-close {
+        background: none; border: none; color: #94a3b8; font-size: 1rem;
+        cursor: pointer; padding: 4px; flex-shrink: 0;
       }
     </style>
   </head>
@@ -845,8 +842,16 @@
       </div>
     </div>
 
-    <!-- カスタム通知コンテナ（LINE風） -->
-    <div id="customNotificationContainer"></div>
+    <!-- PWAインストールバナー -->
+    <div id="pwaInstallBanner">
+      <div class="pwa-banner-icon"><i class="fas fa-comment-dots"></i></div>
+      <div class="pwa-banner-text">
+        <strong>SimpleChatをインストール</strong>
+        <span id="pwaInstallHint">ホーム画面に追加して通知を受け取ろう</span>
+      </div>
+      <button class="pwa-banner-btn" id="pwaInstallButton">インストール</button>
+      <button class="pwa-banner-close" id="pwaInstallClose"><i class="fas fa-times"></i></button>
+    </div>
     <div
       id="loadingOverlay"
       class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden"
@@ -992,6 +997,34 @@
                 <button id="openAdminModalButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
                     <i class="fas fa-user-shield mr-2"></i>管理者設定を開く
                 </button>
+            </div>
+
+            <!-- デスクトップアプリ設定 (Windows版のみ表示) -->
+            <div id="desktopSettingsContainer" class="border-t pt-4 mt-4 hidden">
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
+                    <i class="fas fa-desktop mr-1"></i> アプリ設定
+                </h3>
+                <div class="setting-row">
+                    <div class="setting-label"><i class="fas fa-volume-up"></i> 通知音</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleNotifSound" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label"><i class="fas fa-comment-dots"></i> デスクトップ通知</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleDesktopNotif" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-label"><i class="fas fa-rocket"></i> PC起動時に起動</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggleAutoStart">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
 
             <div id="settingsMessage" class="text-center mt-2 text-sm"></div>
@@ -1389,7 +1422,6 @@
       let db;
       let auth;
       let messaging;
-      let sessionId = crypto.randomUUID();
       let userId = null;
       let userNickname = null;
       let isAdmin = false;
@@ -1543,7 +1575,28 @@
       
       let searchQuery = "";
       let isInitialMessageLoad = true;
-      const notificationSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+      // Web Audio API による洗練された通知チャイム
+      function playNotificationSound() {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const now = ctx.currentTime;
+          const notes = [659.25, 783.99, 1046.50]; // E5, G5, C6 の和音チャイム
+          notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + i * 0.09);
+            gain.gain.setValueAtTime(0, now + i * 0.09);
+            gain.gain.linearRampToValueAtTime(0.18, now + i * 0.09 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.5);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.09);
+            osc.stop(now + i * 0.09 + 0.5);
+          });
+          setTimeout(() => ctx.close(), 1500);
+        } catch(e) {}
+      }
       let selectedMessageForContext = null;
 
       // =========================================================================
@@ -2121,19 +2174,16 @@
       };
 
       // navigator.sendBeacon でCloudflare Worker経由で確実にオフライン化
-      // Firestoreの非同期書き込みはタブ閉じ時に完了しないが、
-      // sendBeaconはブラウザがバックグラウンドでHTTP POSTを送信するため確実
       function sendOfflineBeacon() {
-        if (!userId || !sessionId) return;
+        if (!userId) return;
         const url = 'https://simplechat-api.astro-fray-server.workers.dev/api/setOffline';
-        const data = JSON.stringify({ userId, sessionId, appId });
+        const data = JSON.stringify({ userId, appId });
         try {
           if (navigator.sendBeacon) {
             navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }));
           } else {
-            // sendBeacon非対応のフォールバック（同期XHR）
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', url, false); // 同期
+            xhr.open('POST', url, false);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.send(data);
           }
@@ -2145,22 +2195,15 @@
       async function updateUserStatus(state) {
         if (!userId || !userNickname) return;
         
-        let computedState = state;
         const statusRef = doc(db, `artifacts/${appId}/status`, userId);
         try {
           let updateData = {
+            state: state,
             last_changed: serverTimestamp(),
             nickname: userNickname,
             avatarUrl: userAvatarUrl || null,
             currentRoomId: currentRoomId,
           };
-          
-          if (state === 'offline') {
-              updateData.activeSessions = arrayRemove(sessionId);
-          } else {
-              updateData.activeSessions = arrayUnion(sessionId);
-              updateData.state = state;
-          }
           await setDoc(statusRef, updateData, { merge: true });
         } catch (error) {
           console.error("Status update error:", error);
@@ -2193,8 +2236,7 @@
         membersList.innerHTML = "";
         
         const processedUsers = users.map(u => {
-            const isOnline = u.activeSessions && u.activeSessions.length > 0;
-            const computedState = isOnline ? (u.state || 'online') : 'offline';
+            const computedState = u.state || 'offline';
             
             // update own UI status indicator here
             if (u.id === userId) {
@@ -2953,6 +2995,8 @@
 
       async function updateReadReceiptForCurrentUser() {
         if (!currentRoomId || !userId) return;
+        // バックグラウンド・最小化・非フォーカス時は既読にしない
+        if (document.visibilityState === 'hidden' || !document.hasFocus()) return;
         try {
           const lastMsgId = lastMessagesData.length ? lastMessagesData[lastMessagesData.length - 1].id : null;
           const myReceiptRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`, userId);
@@ -2960,8 +3004,8 @@
         } catch (error) {}
       }
       
-      document.addEventListener("visibilitychange", () => { if (!document.hidden) updateReadReceiptForCurrentUser(); });
-      window.addEventListener("focus", updateReadReceiptForCurrentUser);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && document.hasFocus()) updateReadReceiptForCurrentUser(); });
+      window.addEventListener("focus", () => { if (!document.hidden) updateReadReceiptForCurrentUser(); });
 
       let longPressTimer;
       messagesDisplay.addEventListener("touchstart", (e) => {
@@ -3375,80 +3419,29 @@
       // Notifications & Updater
       // =========================================================================
 
-      // --- LINE風カスタム通知（Tauri Windows版用）---
-      function showCustomNotification(title, body, roomId) {
-        const container = document.getElementById('customNotificationContainer');
-        if (!container) return;
-
-        // 通知音を鳴らす
-        try { notificationSound.currentTime = 0; notificationSound.play(); } catch(e) {}
-
-        const notif = document.createElement('div');
-        notif.className = 'custom-notif';
-        notif.innerHTML = `
-          <div class="custom-notif-icon"><i class="fas fa-comment-dots"></i></div>
-          <div class="custom-notif-content">
-            <div class="custom-notif-title">${escapeHtml(title)}</div>
-            <div class="custom-notif-body">${escapeHtml(body)}</div>
-            <div class="custom-notif-time">たった今</div>
-          </div>
-          <button class="custom-notif-close" onclick="event.stopPropagation(); dismissNotification(this.parentElement)">
-            <i class="fas fa-times"></i>
-          </button>
-        `;
-
-        // クリックで該当ルームに移動
-        notif.addEventListener('click', () => {
-          if (roomId) {
-            // ルームIDに対応するルーム名を見つけてselectRoomを呼ぶ
-            const roomItem = document.getElementById(`room-item-${roomId}`);
-            if (roomItem) roomItem.click();
-          }
-          dismissNotification(notif);
-        });
-
-        container.appendChild(notif);
-
-        // 最大3件まで表示
-        while (container.children.length > 3) {
-          const oldest = container.children[container.children.length - 1];
-          oldest.remove();
-        }
-
-        // 5秒後に自動的に消える
-        setTimeout(() => {
-          if (notif.parentElement) dismissNotification(notif);
-        }, 5000);
-      }
-
-      // 通知を閉じるアニメーション
-      window.dismissNotification = function(el) {
-        el.classList.add('dismissing');
-        setTimeout(() => el.remove(), 350);
-      };
-
-      // HTMLエスケープ
-      function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-      }
-
       // --- 統合通知関数 ---
       async function showNotification(title, body, roomId) {
+        // 設定チェック
+        const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
+        const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+        
+        if (!desktopEnabled) return;
+
+        if (soundEnabled) {
+          playNotificationSound();
+        }
+
         if (isTauri) {
-          // Tauri版: アプリが非表示の時はOS標準通知、表示中はLINE風通知
-          if (document.visibilityState === 'hidden') {
-            if (window.__TAURI__?.notification) {
-                const { isPermissionGranted, requestPermission, sendNotification } = window.__TAURI__.notification;
-                const granted = await isPermissionGranted();
-                if (!granted) {
-                    await requestPermission();
-                }
-                sendNotification({ title: title, body: body });
+          if (window.__TAURI__?.core?.invoke) {
+            try {
+              await window.__TAURI__.core.invoke('show_notification_window', {
+                title: title,
+                body: body,
+                roomId: roomId || ""
+              });
+            } catch(e) {
+              console.error("Failed to show notification window", e);
             }
-          } else {
-            showCustomNotification(title, body, roomId);
           }
         } else if ('Notification' in window) {
           // Web/PWA版: ブラウザ標準通知
@@ -3528,10 +3521,116 @@
       };
 
       // =========================================================================
+      // PWA & Settings Management
+      // =========================================================================
+      
+      let deferredPrompt;
+      const pwaBanner = document.getElementById('pwaInstallBanner');
+      const pwaInstallBtn = document.getElementById('pwaInstallButton');
+      const pwaCloseBtn = document.getElementById('pwaInstallClose');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // デフォルトのプロンプトを防止
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // すでにPWAとして起動しているかチェック
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        
+        if (!isStandalone && !isTauri) {
+          pwaBanner.classList.add('show');
+        }
+      });
+
+      pwaInstallBtn.addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            pwaBanner.classList.remove('show');
+          }
+          deferredPrompt = null;
+        } else if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+          // iOS Safariの場合
+          alert("Safariの「共有」ボタンから「ホーム画面に追加」を選択してください。\\n追加すると通知を受け取れるようになります。");
+        }
+      });
+
+      pwaCloseBtn.addEventListener('click', () => {
+        pwaBanner.classList.remove('show');
+      });
+
+      // iOS向けヒント表示
+      if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && !window.navigator.standalone) {
+        document.getElementById('pwaInstallHint').textContent = "共有ボタンから「ホーム画面に追加」してください";
+        if (!isTauri) pwaBanner.classList.add('show');
+      }
+      
+      function initSettings() {
+        if (!isTauri) return;
+        
+        document.getElementById('desktopSettingsContainer').classList.remove('hidden');
+        
+        const toggleNotifSound = document.getElementById('toggleNotifSound');
+        const toggleDesktopNotif = document.getElementById('toggleDesktopNotif');
+        const toggleAutoStart = document.getElementById('toggleAutoStart');
+        
+        // Load initial state
+        toggleNotifSound.checked = localStorage.getItem('simplechat_sound') !== 'false';
+        toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+        
+        if (window.__TAURI__?.autostart) {
+          window.__TAURI__.autostart.isEnabled().then(enabled => {
+            toggleAutoStart.checked = enabled;
+          }).catch(console.error);
+        }
+        
+        // Event Listeners
+        toggleNotifSound.addEventListener('change', (e) => {
+          localStorage.setItem('simplechat_sound', e.target.checked);
+        });
+        
+        toggleDesktopNotif.addEventListener('change', (e) => {
+          localStorage.setItem('simplechat_desktop_notif', e.target.checked);
+        });
+        
+        toggleAutoStart.addEventListener('change', async (e) => {
+          if (!window.__TAURI__?.autostart) return;
+          try {
+            if (e.target.checked) {
+              await window.__TAURI__.autostart.enable();
+            } else {
+              await window.__TAURI__.autostart.disable();
+            }
+          } catch(err) {
+            console.error("Autostart toggle failed", err);
+            e.target.checked = !e.target.checked; // revert UI on failure
+          }
+        });
+      }
+
+      // =========================================================================
       // Application Startup
       // =========================================================================
       window.onload = async () => {
           loadingOverlay.classList.remove('hidden');
+          
+          initSettings();
+
+          // Tauri 通知からのルーム遷移イベントリッスン
+          if (isTauri && window.__TAURI__?.event?.listen) {
+            window.__TAURI__.event.listen('open-room', (event) => {
+              const rId = event.payload?.roomId;
+              if (rId) {
+                // Focus main window
+                window.__TAURI__.webviewWindow.getCurrentWebviewWindow().unminimize();
+                window.__TAURI__.webviewWindow.getCurrentWebviewWindow().show();
+                window.__TAURI__.webviewWindow.getCurrentWebviewWindow().setFocus();
+                const roomItem = document.getElementById(`room-item-${rId}`);
+                if (roomItem) roomItem.click();
+              }
+            });
+          }
 
           // Tauri版: まずアップデートチェック（ブロッキング）
           const hasUpdate = await blockingUpdateCheck();

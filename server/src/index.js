@@ -250,12 +250,11 @@ async function handleSendNotification(request, env) {
         
         let shouldSend = true;
         if (!statusData.error && statusData.fields) {
-            const activeSessions = statusData.fields.activeSessions?.arrayValue?.values || [];
-            const isOnline = activeSessions.length > 0;
+            const state = statusData.fields.state?.stringValue || 'offline';
             const currentRoomId = statusData.fields.currentRoomId?.stringValue;
             
             // オンラインかつ、今そのルームを見ているなら通知不要
-            if (isOnline && currentRoomId === roomId) {
+            if (state === 'online' && currentRoomId === roomId) {
                 shouldSend = false;
             }
         }
@@ -450,9 +449,9 @@ async function handleSetOffline(request, env) {
   try {
     const bodyText = await request.text();
     const data = JSON.parse(bodyText);
-    const { userId, sessionId, appId } = data;
+    const { userId, appId } = data;
     
-    if (!userId || !sessionId || !appId) {
+    if (!userId || !appId) {
       return new Response("Missing fields", { status: 400, headers: corsHeaders });
     }
 
@@ -461,29 +460,20 @@ async function handleSetOffline(request, env) {
 
     const projectId = env.FIREBASE_PROJECT_ID;
 
-    // activeSessions から対象の sessionId を削除
-    const removeBody = {
-      writes: [{
-        transform: {
-          document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/status/${userId}`,
-          fieldTransforms: [{
-            fieldPath: "activeSessions",
-            removeAllFromArray: {
-              values: [{ stringValue: sessionId }]
-            }
-          }]
-        }
-      }]
-    };
-    
-    const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
-    await fetch(commitUrl, {
-      method: "POST",
+    // state を直接 offline に設定
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/status/${userId}?updateMask.fieldPaths=state&updateMask.fieldPaths=last_changed`;
+    await fetch(docUrl, {
+      method: "PATCH",
       headers: {
         "Authorization": `Bearer ${workerToken}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(removeBody)
+      body: JSON.stringify({
+        fields: {
+          state: { stringValue: "offline" },
+          last_changed: { timestampValue: new Date().toISOString() }
+        }
+      })
     });
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });

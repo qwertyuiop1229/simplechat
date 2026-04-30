@@ -1,8 +1,53 @@
 use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent};
+use tauri::WebviewWindowBuilder;
+
+#[tauri::command]
+fn show_notification_window(app_handle: tauri::AppHandle, title: String, body: String, room_id: String) {
+    // 既存の通知ウィンドウがあれば閉じる
+    if let Some(window) = app_handle.get_webview_window("notification") {
+        let _ = window.close();
+    }
+
+    // クエリパラメータで通知内容を渡す
+    let url = format!("/notification.html?title={}&body={}&roomId={}", 
+        urlencoding::encode(&title), 
+        urlencoding::encode(&body),
+        urlencoding::encode(&room_id)
+    );
+
+    let _notification_window = WebviewWindowBuilder::new(
+        &app_handle,
+        "notification",
+        tauri::WebviewUrl::App(url.into())
+    )
+    .inner_size(360.0, 100.0)
+    .always_on_top(true)
+    .decorations(false)
+    .transparent(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .visible(false) // 初期は非表示（画面外に配置するため）
+    .build()
+    .unwrap();
+
+    // 画面の右下に配置
+    if let Some(window) = app_handle.get_webview_window("notification") {
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            let size = monitor.size();
+            let position = tauri::PhysicalPosition {
+                x: (size.width as i32) - 380, // 右端から20px
+                y: (size.height as i32) - 140, // 下端から40px
+            };
+            let _ = window.set_position(position);
+            let _ = window.show();
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .invoke_handler(tauri::generate_handler![show_notification_window])
     .setup(|app| {
       let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
       let show_i = MenuItem::with_id(app, "show", "Show SimpleChat", true, None::<&str>)?;
@@ -57,7 +102,6 @@ pub fn run() {
         }
     })
     .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-        // 多重起動時は既存のウィンドウを再表示してフォーカスする
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.show();
             let _ = window.set_focus();
@@ -66,6 +110,10 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        Some(vec![]),
+    ))
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

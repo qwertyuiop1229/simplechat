@@ -3,14 +3,16 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "*"
   ],
   "permissions": [
     "core:default",
     "core:window:default",
     "core:window:allow-set-focus",
     "core:window:allow-request-user-attention",
+    "core:window:allow-create",
     "notification:default",
-    "updater:default"
+    "updater:default",
+    "autostart:default"
   ]
 }
