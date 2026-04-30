@@ -2247,12 +2247,12 @@
             name.textContent = member.nickname || "不明なユーザー";
             info.appendChild(name);
 
-            if (member.state === 'away') {
+            if (member.computedState === 'away') {
                 const statusText = document.createElement("div");
                 statusText.className = "member-status-text";
                 statusText.textContent = "離席中";
                 info.appendChild(statusText);
-            } else if (member.state === 'offline') {
+            } else if (member.computedState === 'offline') {
                 const statusText = document.createElement("div");
                 statusText.className = "member-status-text";
                 statusText.textContent = formatTimeAgo(member.last_changed);
@@ -3493,6 +3493,8 @@
           console.log('No updates available.');
         } catch (error) {
           console.error('Update check failed:', error);
+          const errorDetail = error instanceof Error ? error.message : (typeof error === 'object' ? JSON.stringify(error) : String(error));
+          alert("アップデートの確認中にエラーが発生しました。\nネットワーク接続を確認するか、しばらく待ってから再度お試しください。\n\n【エラー詳細】\n" + errorDetail);
         }
         return false;
       }

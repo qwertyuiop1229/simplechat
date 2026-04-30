@@ -56,6 +56,14 @@ pub fn run() {
             let _ = window.hide();
         }
     })
+    .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        // 多重起動時は既存のウィンドウを再表示してフォーカスする
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+            let _ = window.eval("if(window.blockingUpdateCheck) window.blockingUpdateCheck()");
+        }
+    }))
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .run(tauri::generate_context!())
