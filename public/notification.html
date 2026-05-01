@@ -113,6 +113,7 @@
     const title = params.get('title') || '通知';
     const body = params.get('body') || '';
     const roomId = params.get('roomId') || '';
+    const id = params.get('id') || '';
 
     document.getElementById('notifTitle').textContent = title;
     document.getElementById('notifBody').textContent = body;
@@ -122,10 +123,11 @@
     const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
     const appWindow = getCurrentWebviewWindow();
 
-    function dismissAndClose() {
+    async function dismissAndClose() {
       document.getElementById('notifBox').classList.add('dismissing');
-      setTimeout(() => {
-        appWindow.close();
+      setTimeout(async () => {
+        // Backend command to handle position updates of remaining windows
+        await invoke('close_notification', { label: appWindow.label });
       }, 350);
     }
 

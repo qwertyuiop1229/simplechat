@@ -933,101 +933,149 @@
           </div>
         </div>
 
-        <!-- 設定モーダル (マイページ) -->
+        <!-- 設定モーダル (マイページ / 設定) -->
         <div
           id="settingsModal"
           class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden"
         >
           <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative"
+            class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative flex flex-col max-h-[90vh] my-8 overflow-hidden"
           >
-            <!-- 閉じるボタンを右上に絶対配置 -->
-            <button id="closeSettingsButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+            <!-- 閉じるボタン -->
+            <button id="closeSettingsButton" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
                 <i class="fas fa-times text-xl"></i>
             </button>
 
-            <!-- タイトルを中央寄せに変更 -->
-            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">アカウント設定</h2>
+            <!-- タブヘッダー -->
+            <div class="flex border-b">
+                <button id="tabProfile" class="flex-1 py-4 text-sm font-bold border-b-2 border-gray-800 text-gray-800 transition-all">プロフィール</button>
+                <button id="tabSettings" class="flex-1 py-4 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-all">設定</button>
+            </div>
             
-            <div class="flex flex-col items-center mb-6">
-                <div class="w-20 h-20 rounded-full bg-gray-700 text-white flex items-center justify-center text-3xl font-bold mb-2 relative cursor-pointer" id="avatarUploadTrigger">
-                    <span id="settingsAvatarText"></span>
-                    <img id="settingsAvatarPreview" src="" class="absolute inset-0 w-full h-full object-cover rounded-full hidden" />
-                    <div class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs shadow-md z-10 pointer-events-none border-2 border-white">
-                        <i class="fas fa-pencil-alt"></i>
+            <!-- コンテンツエリア (スクロール可能) -->
+            <div class="flex-1 overflow-y-auto p-8 pt-6">
+                
+                <!-- プロフィールタブ -->
+                <div id="profileSection">
+                    <div class="flex flex-col items-center mb-6">
+                        <div class="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-4xl font-bold mb-3 relative cursor-pointer group" id="avatarUploadTrigger">
+                            <span id="settingsAvatarText"></span>
+                            <img id="settingsAvatarPreview" src="" class="absolute inset-0 w-full h-full object-cover rounded-full hidden" />
+                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-full flex items-center justify-center">
+                                <i class="fas fa-camera opacity-0 group-hover:opacity-100 text-white text-xl transition-all"></i>
+                            </div>
+                            <div class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm shadow-lg z-10 pointer-events-none border-2 border-white">
+                                <i class="fas fa-pencil-alt"></i>
+                            </div>
+                            <input type="file" id="avatarUploadInput" accept="image/*" class="hidden" />
+                        </div>
+                        <p class="text-xs text-gray-400">クリックしてアイコンを変更</p>
+                        <button id="resetAvatarButton" class="mt-3 px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold rounded-full transition-all hidden">
+                            <i class="fas fa-undo mr-1"></i>アイコンをリセット
+                        </button>
                     </div>
-                    <input type="file" id="avatarUploadInput" accept="image/*" class="hidden" />
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-500 text-xs font-bold uppercase tracking-wider mb-2" for="settingsNicknameInput">
+                                ニックネーム
+                            </label>
+                            <input
+                              type="text"
+                              id="settingsNicknameInput"
+                              placeholder="ニックネーム"
+                              class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+                            />
+                        </div>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">クリックしてアイコンを変更 (100KB以下に自動リサイズ)</p>
-                <button id="resetAvatarButton" class="mt-2 px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-md transition-colors duration-200 hidden">
-                    <i class="fas fa-undo mr-1"></i>アイコンをリセット
-                </button>
+
+                <!-- 設定タブ -->
+                <div id="settingsSection" class="hidden space-y-6">
+                    <!-- 管理者設定 (管理者のみ表示) -->
+                    <div id="adminPanelContainer" class="hidden">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">管理者オプション</h3>
+                        <button id="openAdminModalButton" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2">
+                            <i class="fas fa-user-shield"></i> 管理者パネルを開く
+                        </button>
+                    </div>
+
+                    <!-- 通知設定 -->
+                    <div>
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">通知</h3>
+                        <div class="bg-gray-50 rounded-2xl p-4 space-y-1">
+                            <div class="setting-row">
+                                <div class="setting-label"><i class="fas fa-volume-up"></i> 通知音</div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggleNotifSound" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row" id="browserNotifRow">
+                                <div class="setting-label"><i class="fas fa-bell"></i> ブラウザ通知</div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggleBrowserNotif" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="setting-row hidden" id="desktopNotifRow">
+                                <div class="setting-label"><i class="fas fa-comment-dots"></i> デスクトップ通知 (Tauri)</div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggleDesktopNotif" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- アプリ設定 (Windows版のみ表示) -->
+                    <div id="desktopSettingsContainer" class="hidden">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">アプリ動作</h3>
+                        <div class="bg-gray-50 rounded-2xl p-4 space-y-1">
+                            <div class="setting-row">
+                                <div class="setting-label"><i class="fas fa-rocket"></i> PC起動時に自動実行</div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggleAutoStart">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ショートカットキー -->
+                    <div id="shortcutInfoContainer" class="hidden">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">ショートカット</h3>
+                        <div class="bg-blue-50 text-blue-700 p-4 rounded-xl text-sm leading-relaxed">
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-keyboard mt-1"></i>
+                                <div>
+                                    <p class="font-bold mb-1">クイックアクセス</p>
+                                    <p class="text-xs opacity-80"><kbd class="bg-blue-100 px-1 rounded border border-blue-200">Ctrl</kbd> + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">Shift</kbd> + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">S</kbd></p>
+                                    <p class="text-xs mt-2">アプリを最前面に表示し、メッセージ入力欄にフォーカスします。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="settingsMessage" class="text-center mt-4 text-sm font-medium"></div>
             </div>
 
-            <div class="mb-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="settingsNicknameInput">
-                    ニックネーム
-                </label>
-                <input
-                  type="text"
-                  id="settingsNicknameInput"
-                  class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none"
-                />
-            </div>
-
-            <div class="flex justify-between items-center border-t pt-4 gap-4">
-                 <!-- ログアウトボタン: 影なし -->
+            <!-- フッターアクション -->
+            <div class="p-8 py-6 bg-gray-50 flex justify-between items-center gap-4 border-t">
                 <button
                   id="logoutButtonInModal"
-                  class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                  class="flex-1 bg-white hover:bg-red-50 text-red-500 font-bold py-3 px-4 rounded-xl border border-gray-200 transition-all"
                 >
                   ログアウト
                 </button>
-                 <!-- 保存ボタン: 影なし -->
                 <button
                   id="saveSettingsButton"
-                  class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200"
+                  class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all"
                 >
                   保存
                 </button>
             </div>
-            
-            <!-- 管理者設定ボタン (管理者のみ表示) -->
-            <div id="adminPanelContainer" class="border-t pt-4 mt-4 hidden">
-                <button id="openAdminModalButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                    <i class="fas fa-user-shield mr-2"></i>管理者設定を開く
-                </button>
-            </div>
-
-            <!-- デスクトップアプリ設定 (Windows版のみ表示) -->
-            <div id="desktopSettingsContainer" class="border-t pt-4 mt-4 hidden">
-                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
-                    <i class="fas fa-desktop mr-1"></i> アプリ設定
-                </h3>
-                <div class="setting-row">
-                    <div class="setting-label"><i class="fas fa-volume-up"></i> 通知音</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleNotifSound" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <div class="setting-row">
-                    <div class="setting-label"><i class="fas fa-comment-dots"></i> デスクトップ通知</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleDesktopNotif" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <div class="setting-row">
-                    <div class="setting-label"><i class="fas fa-rocket"></i> PC起動時に起動</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggleAutoStart">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div id="settingsMessage" class="text-center mt-2 text-sm"></div>
           </div>
         </div>
 
@@ -1883,57 +1931,45 @@
           if(!confirm(`「${email}」を許可リストから削除しますか？`)) return;
           adminMessage.textContent = "削除中...";
           try {
-              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");
-              const snap = await getDoc(ref);
-              let emails = snap.exists() ? snap.data().emails || [] : [];
-              emails = emails.filter(e => e !== email);
-              await setDoc(ref, { emails }, { merge: true });
-              renderAllowedEmails(emails);
-              adminMessage.textContent = "削除しました。";
-          } catch(e) {
-              adminMessage.textContent = "エラーが発生しました。";
+              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");      // ★ ショートカットから呼ばれるフォーカス関数
+      window.focusMessageInput = function() {
+        if (currentRoomId) {
+          messageInput.focus();
+        } else {
+          // ルームを開いていない場合は検索にフォーカス
+          if (searchContainer.classList.contains("hidden")) {
+            toggleSearchButton.click();
+          } else {
+            searchInput.focus();
+          }
+        }
+      };
+
+      const tabProfile = document.getElementById("tabProfile");
+      const tabSettings = document.getElementById("tabSettings");
+      const profileSection = document.getElementById("profileSection");
+      const settingsSection = document.getElementById("settingsSection");
+
+      function switchSettingsTab(tab) {
+          if (tab === "profile") {
+              tabProfile.classList.add("border-gray-800", "text-gray-800");
+              tabProfile.classList.remove("border-transparent", "text-gray-400");
+              tabSettings.classList.add("border-transparent", "text-gray-400");
+              tabSettings.classList.remove("border-gray-800", "text-gray-800");
+              profileSection.classList.remove("hidden");
+              settingsSection.classList.add("hidden");
+          } else {
+              tabSettings.classList.add("border-gray-800", "text-gray-800");
+              tabSettings.classList.remove("border-transparent", "text-gray-400");
+              tabProfile.classList.add("border-transparent", "text-gray-400");
+              tabProfile.classList.remove("border-gray-800", "text-gray-800");
+              settingsSection.classList.remove("hidden");
+              profileSection.classList.add("hidden");
           }
       }
 
-      // 管理者リストへの追加と削除
-      addAdminEmailButton.addEventListener("click", async () => {
-          const email = newAdminEmailInput.value.trim();
-          if (!email) return;
-          adminMessage.textContent = "追加中...";
-          try {
-              const ref = doc(db, `artifacts/${appId}/settings`, "adminList");
-              const snap = await getDoc(ref);
-              let emails = snap.exists() ? snap.data().emails || [] : [];
-              if (!emails.includes(email)) {
-                  emails.push(email);
-                  await setDoc(ref, { emails }, { merge: true });
-                  newAdminEmailInput.value = "";
-                  renderAdminEmails(emails);
-                  adminMessage.textContent = "追加しました。";
-              } else {
-                  adminMessage.textContent = "すでに追加されています。";
-              }
-          } catch(e) {
-              console.error(e);
-              adminMessage.textContent = "エラーが発生しました。";
-          }
-      });
-
-      async function removeAdminEmail(email) {
-          if(!confirm(`「${email}」を管理者から削除しますか？`)) return;
-          adminMessage.textContent = "削除中...";
-          try {
-              const ref = doc(db, `artifacts/${appId}/settings`, "adminList");
-              const snap = await getDoc(ref);
-              let emails = snap.exists() ? snap.data().emails || [] : [];
-              emails = emails.filter(e => e !== email);
-              await setDoc(ref, { emails }, { merge: true });
-              renderAdminEmails(emails);
-              adminMessage.textContent = "削除しました。";
-          } catch(e) {
-              adminMessage.textContent = "エラーが発生しました。";
-          }
-      }
+      tabProfile.addEventListener("click", () => switchSettingsTab("profile"));
+      tabSettings.addEventListener("click", () => switchSettingsTab("settings"));
 
       let pendingAvatarUrl = null;
       const avatarUploadTrigger = document.getElementById("avatarUploadTrigger");
@@ -1972,6 +2008,7 @@
       
       userPanel.addEventListener("click", () => {
         if(!userNickname) return;
+        switchSettingsTab("profile"); // 初期表示はプロフィール
         settingsNicknameInput.value = userNickname;
         settingsAvatarText.textContent = userNickname.charAt(0).toUpperCase();
         pendingAvatarUrl = null;
@@ -2089,6 +2126,7 @@
           appContainer.classList.remove("hidden");
           loadRooms();
           startPresenceSystem();
+          initializeFCM();
         } catch (error) {
           nicknameMessage.textContent = `エラー: ${error.message}`;
         } finally {
@@ -3280,7 +3318,7 @@
       }
 
       // =========================================================================
-      // Keyboard Shortcuts (Enter for Confirm, Shift for Cancel) - ★追加
+      // Keyboard Shortcuts (Enter for Confirm, Shift for Cancel)
       // =========================================================================
       document.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -3306,6 +3344,189 @@
             e.preventDefault(); confirmDeleteButton.click();
           } else if (
             !deleteRoomPasswordModal.classList.contains("hidden") && document.activeElement === deleteRoomPasswordInput
+          ) {
+            e.preventDefault(); confirmDeletePasswordButton.click();
+          } else if(
+            !settingsModal.classList.contains("hidden") && document.activeElement === settingsNicknameInput
+          ) {
+            e.preventDefault(); saveSettingsButton.click();
+          }
+        }
+
+        if (e.key === "Shift") {
+          if (!createRoomPasswordModal.classList.contains("hidden")) {
+            cancelCreateRoomButton.click();
+          } else if (!joinRoomPasswordModal.classList.contains("hidden")) {
+            cancelJoinRoomButton.click();
+          } else if (!deleteRoomConfirmModal.classList.contains("hidden")) {
+            cancelDeleteButton.click();
+          } else if (!deleteRoomPasswordModal.classList.contains("hidden")) {
+            cancelDeletePasswordButton.click();
+          } else if (!settingsModal.classList.contains("hidden")) {
+            closeSettingsButton.click();
+          }
+        }
+      });
+
+      // =========================================================================
+      // FCM Initialization (全プラットフォーム対応)
+      // =========================================================================
+      async function initializeFCM() {
+        try {
+          if ('serviceWorker' in navigator) {
+            await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+          }
+          if (!messaging) messaging = getMessaging(app);
+          if ('Notification' in window) {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              try {
+                const swReg = await navigator.serviceWorker.ready;
+                const token = await getToken(messaging, { 
+                    vapidKey: "BCe5ICJmyyuurq1DsPBXY6AsQcSsIDuXPieZ-c4L1_5zcNwyq2HC3DBhMBND0g9oTwPmEzUhiLqsAjLrnmVlxj0",
+                    serviceWorkerRegistration: swReg
+                });
+                if (token && userId) {
+                  const userRef = doc(db, `artifacts/${appId}/users`, userId);
+                  await setDoc(userRef, { fcmTokens: arrayUnion(token) }, { merge: true });
+                }
+              } catch (tokenErr) { console.error('FCM Token error:', tokenErr); }
+            }
+          }
+          onMessage(messaging, (payload) => {
+            const title = payload.data?.title || payload.notification?.title || 'SimpleChat';
+            const body = payload.data?.body || payload.notification?.body || '新しいメッセージ';
+            const roomId = payload.data?.roomId || null;
+            showNotification(title, body, roomId);
+          });
+        } catch (error) { console.error('FCM Initialization Error:', error); }
+      }
+
+      // =========================================================================
+      // Sidebar Resizing Feature
+      // =========================================================================
+      function initializeResizer() {
+        const sidebar = document.getElementById("sidebar");
+        const resizer = document.getElementById("resizer");
+        const SIDEBAR_WIDTH_KEY = "chatAppSidebarWidth";
+        const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+        if (savedWidth) sidebar.style.width = savedWidth;
+
+        let isResizing = false;
+        resizer.addEventListener("mousedown", () => {
+          isResizing = true;
+          document.body.style.userSelect = "none";
+          document.addEventListener("mousemove", handleMouseMove);
+          document.addEventListener("mouseup", handleMouseUp);
+        });
+        function handleMouseMove(e) {
+          if (isResizing) {
+            const newWidth = Math.max(180, Math.min(600, e.clientX));
+            sidebar.style.width = `${newWidth}px`;
+          }
+        }
+        function handleMouseUp() {
+          isResizing = false;
+          document.body.style.userSelect = "";
+          document.removeEventListener("mousemove", handleMouseMove);
+          document.removeEventListener("mouseup", handleMouseUp);
+          localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebar.style.width);
+        }
+      }
+
+      // =========================================================================
+      // Notifications & Updater
+      // =========================================================================
+      let lastNotificationTime = 0;
+      let lastNotificationBody = "";
+      async function showNotification(title, body, roomId) {
+        const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
+        const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+        const browserEnabled = localStorage.getItem('simplechat_browser_notif') !== 'false';
+        
+        if (!isTauri && !browserEnabled) return;
+        if (isTauri && !desktopEnabled) return;
+
+        const now = Date.now();
+        if (now - lastNotificationTime < 1000 && body === lastNotificationBody) return;
+        lastNotificationTime = now;
+        lastNotificationBody = body;
+
+        if (soundEnabled) playNotificationSound();
+
+        if (isTauri) {
+          if (window.__TAURI__?.core?.invoke) {
+            try {
+              await window.__TAURI__.core.invoke('show_notification_window', { title, body, roomId: roomId || "" });
+            } catch(e) { console.error(e); }
+          }
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, { body, icon: '/icon-192x192.png', tag: roomId || 'simplechat' });
+        }
+      }
+
+      let pendingUpdate = null;
+      async function blockingUpdateCheck() {
+        if (!isTauri) return false;
+        const updater = window.__TAURI__?.updater;
+        if (!updater) return false;
+        try {
+          const update = await updater.check();
+          if (update) {
+            pendingUpdate = update;
+            const overlay = document.getElementById('updateOverlay');
+            document.getElementById('updateVersionText').textContent = `v${update.version} が利用可能です`;
+            document.getElementById('updateBodyText').textContent = update.body || '更新があります。';
+            overlay.classList.add('show');
+            return true;
+          }
+        } catch (error) { console.error(error); }
+        return false;
+      }
+
+      window.performUpdate = async function() {
+        if (!pendingUpdate) return;
+        const btn = document.getElementById('updateButton');
+        const progress = document.getElementById('updateProgress');
+        const progressText = document.getElementById('updateProgressText');
+        btn.disabled = true;
+        progress.classList.add('show');
+        progressText.textContent = '更新中...';
+        try {
+          await pendingUpdate.downloadAndInstall();
+          window.location.reload();
+        } catch (error) {
+          progressText.textContent = '更新失敗';
+          btn.disabled = false;
+        }
+      };
+
+      // =========================================================================
+      // PWA & Settings Management
+      // =========================================================================
+      function initSettings() {
+        const toggleNotifSound = document.getElementById('toggleNotifSound');
+        const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
+        const toggleDesktopNotif = document.getElementById('toggleDesktopNotif');
+        const toggleAutoStart = document.getElementById('toggleAutoStart');
+        
+        toggleNotifSound.checked = localStorage.getItem('simplechat_sound') !== 'false';
+        toggleBrowserNotif.checked = localStorage.getItem('simplechat_browser_notif') !== 'false';
+        
+        if (isTauri) {
+          document.getElementById('desktopSettingsContainer').classList.remove('hidden');
+          toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+          if (window.__TAURI__?.autostart) {
+            window.__TAURI__.autostart.isEnabled().then(enabled => toggleAutoStart.checked = enabled);
+          }
+        }
+        
+        toggleNotifSound.addEventListener('change', (e) => localStorage.setItem('simplechat_sound', e.target.checked));
+        toggleBrowserNotif.addEventListener('change', (e) => localStorage.setItem('simplechat_browser_notif', e.target.checked));
+        toggleDesktopNotif.addEventListener('change', (e) => localStorage.setItem('simplechat_desktop_notif', e.target.checked));
+        toggleAutoStart.addEventListener('change', async (e) => {
+          if (!window.__TAURI__?.autostart) return;
+          try {
           ) {
             e.preventDefault(); confirmDeletePasswordButton.click();
           } else if(
@@ -3419,13 +3640,29 @@
       // Notifications & Updater
       // =========================================================================
 
+      // 重複通知防止用のID管理
+      let lastNotificationTime = 0;
+      let lastNotificationBody = "";
+
       // --- 統合通知関数 ---
       async function showNotification(title, body, roomId) {
         // 設定チェック
         const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
         const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+        const browserEnabled = localStorage.getItem('simplechat_browser_notif') !== 'false';
         
-        if (!desktopEnabled) return;
+        // ブラウザ版で通知オフなら終了
+        if (!isTauri && !browserEnabled) return;
+        // Tauri版でデスクトップ通知オフなら終了
+        if (isTauri && !desktopEnabled) return;
+
+        // 重複チェック (1秒以内の同一内容は無視)
+        const now = Date.now();
+        if (now - lastNotificationTime < 1000 && body === lastNotificationBody) {
+            return;
+        }
+        lastNotificationTime = now;
+        lastNotificationBody = body;
 
         if (soundEnabled) {
           playNotificationSound();
@@ -3567,27 +3804,37 @@
       }
       
       function initSettings() {
-        if (!isTauri) return;
-        
-        document.getElementById('desktopSettingsContainer').classList.remove('hidden');
-        
         const toggleNotifSound = document.getElementById('toggleNotifSound');
+        const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
         const toggleDesktopNotif = document.getElementById('toggleDesktopNotif');
         const toggleAutoStart = document.getElementById('toggleAutoStart');
         
         // Load initial state
         toggleNotifSound.checked = localStorage.getItem('simplechat_sound') !== 'false';
-        toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+        toggleBrowserNotif.checked = localStorage.getItem('simplechat_browser_notif') !== 'false';
         
-        if (window.__TAURI__?.autostart) {
-          window.__TAURI__.autostart.isEnabled().then(enabled => {
-            toggleAutoStart.checked = enabled;
-          }).catch(console.error);
+        if (isTauri) {
+          document.getElementById('desktopSettingsContainer').classList.remove('hidden');
+          document.getElementById('desktopNotifRow').classList.remove('hidden');
+          document.getElementById('shortcutInfoContainer').classList.remove('hidden');
+          document.getElementById('browserNotifRow').classList.add('hidden'); // Tauriではブラウザ通知トグルを隠す
+
+          toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
+          
+          if (window.__TAURI__?.autostart) {
+            window.__TAURI__.autostart.isEnabled().then(enabled => {
+              toggleAutoStart.checked = enabled;
+            }).catch(console.error);
+          }
         }
         
         // Event Listeners
         toggleNotifSound.addEventListener('change', (e) => {
           localStorage.setItem('simplechat_sound', e.target.checked);
+        });
+
+        toggleBrowserNotif.addEventListener('change', (e) => {
+          localStorage.setItem('simplechat_browser_notif', e.target.checked);
         });
         
         toggleDesktopNotif.addEventListener('change', (e) => {
