@@ -15,8 +15,12 @@ export default {
     if (url.pathname === "/api/signup" && request.method === "POST") {
       return await handleSignup(request, env);
     }
+    if (url.pathname === "/api/joinServer" && request.method === "POST") {
+      return await handleJoinServer(request, env);
+    }
+    // 旧フロントエンド互換: /api/joinRoom
     if (url.pathname === "/api/joinRoom" && request.method === "POST") {
-      return await handleJoinRoom(request, env);
+      return await handleJoinRoomLegacy(request, env);
     }
     if (url.pathname === "/api/sendNotification" && request.method === "POST") {
       return await handleSendNotification(request, env);
@@ -32,7 +36,7 @@ export default {
   },
 };
 
-// サインアップ処理（許可リストの検証を含む）
+// サインアップ処理（誰でも登録可能に変更）
 async function handleSignup(request, env) {
   try {
     const { email, password } = await request.json();
@@ -43,24 +47,7 @@ async function handleSignup(request, env) {
     
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. 特権ワーカーとしてFirebase Authにログインし、IDトークンを取得
-    const workerToken = await getWorkerAuthToken(env);
-    if (!workerToken) {
-      return new Response(JSON.stringify({ error: "Internal Server Error: Worker Auth failed" }), { status: 500, headers: corsHeaders });
-    }
-
-    // 2. Firestoreから許可リストを取得
-    const result = await getAllowedEmails(workerToken, env);
-    if (result.error) {
-       return new Response(JSON.stringify({ error: `Firestore Error: ${result.error}` }), { status: 500, headers: corsHeaders });
-    }
-    const allowedEmails = result.emails.map(e => e.trim().toLowerCase());
-    
-    if (!allowedEmails.includes(cleanEmail)) {
-      return new Response(JSON.stringify({ error: "招待されたメールアドレスではありません。管理者にお問い合わせください。" }), { status: 403, headers: corsHeaders });
-    }
-
-    // 3. 許可されている場合、Firebase Identity Toolkit APIでユーザーを作成
+    // Firebase Identity Toolkit APIでユーザーを作成
     const signUpResult = await signUpWithFirebase(cleanEmail, password, env);
 
     if (signUpResult.error) {
@@ -94,37 +81,6 @@ async function getWorkerAuthToken(env) {
   return data.idToken || null;
 }
 
-// Firestore REST APIを使って allowedEmails ドキュメントを取得
-async function getAllowedEmails(idToken, env) {
-  const projectId = env.FIREBASE_PROJECT_ID;
-  const appId = env.FIREBASE_APP_ID;
-  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/settings/allowedEmails`;
-  
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${idToken}`
-    }
-  });
-
-  const data = await res.json();
-  if (data.error) {
-    // ドキュメントが存在しない（まだ誰も許可されていない）場合はエラーにせず空配列を返す
-    if (data.error.code === 404 || data.error.status === "NOT_FOUND") {
-      return { emails: [], error: null };
-    }
-    console.error("Firestore Error:", data.error);
-    return { emails: [], error: data.error.message || "Unknown Firestore Error" };
-  }
-
-  // Firestoreの配列データ構造のパース: data.fields.emails.arrayValue.values
-  if (data.fields && data.fields.emails && data.fields.emails.arrayValue && data.fields.emails.arrayValue.values) {
-    const emails = data.fields.emails.arrayValue.values.map(v => v.stringValue);
-    return { emails, error: null };
-  }
-  return { emails: [], error: null };
-}
-
 // Identity Toolkit APIを使ってアカウント作成
 async function signUpWithFirebase(email, password, env) {
   const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${env.FIREBASE_API_KEY}`;
@@ -141,12 +97,12 @@ async function signUpWithFirebase(email, password, env) {
 }
 
 // -------------------------------------------------------------
-// ルーム参加処理
+// サーバー参加処理
 // -------------------------------------------------------------
-async function handleJoinRoom(request, env) {
+async function handleJoinServer(request, env) {
   try {
-    const { roomId, password, userId, appId } = await request.json();
-    if (!roomId || !password || !userId || !appId) {
+    const { serverId, password, userId, appId } = await request.json();
+    if (!serverId || !password || !userId || !appId) {
       return new Response(JSON.stringify({ success: false, error: "Missing required fields" }), { status: 400, headers: corsHeaders });
     }
 
@@ -156,7 +112,7 @@ async function handleJoinRoom(request, env) {
 
     // Firestoreからパスワードを取得
     const projectId = env.FIREBASE_PROJECT_ID;
-    const pwdUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/public/data/rooms/${roomId}/secrets/password`;
+    const pwdUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/servers/${serverId}/secrets/password`;
     
     const pwdRes = await fetch(pwdUrl, {
       method: "GET",
@@ -165,7 +121,7 @@ async function handleJoinRoom(request, env) {
     const pwdData = await pwdRes.json();
     
     if (pwdData.error) {
-      return new Response(JSON.stringify({ success: false, error: "パスワード設定が見つかりません" }), { status: 404, headers: corsHeaders });
+      return new Response(JSON.stringify({ success: false, error: "サーバーが見つからないか、パスワードが設定されていません。" }), { status: 404, headers: corsHeaders });
     }
 
     const actualPassword = pwdData.fields?.password?.stringValue;
@@ -173,14 +129,14 @@ async function handleJoinRoom(request, env) {
       return new Response(JSON.stringify({ success: false, error: "Incorrect password" }), { status: 401, headers: corsHeaders });
     }
 
-    // パスワードが一致したので、該当ルームの joinedUsers 配列に userId を追加
+    // パスワードが一致したので、該当サーバーの joinedUsers 配列に userId を追加
     // Firestore REST APIで arrayUnion を実行するためのリクエスト
-    const transformUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/public/data/rooms/${roomId}:commit`;
+    const transformUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/servers/${serverId}:commit`;
     const transformBody = {
       writes: [
         {
           transform: {
-            document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/public/data/rooms/${roomId}`,
+            document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/servers/${serverId}`,
             fieldTransforms: [
               {
                 fieldPath: "joinedUsers",
@@ -221,7 +177,8 @@ async function handleJoinRoom(request, env) {
 // -------------------------------------------------------------
 async function handleSendNotification(request, env) {
   try {
-    const { receiverIds, title, body, roomId, appId, senderId } = await request.json();
+    // サーバーの構造に合わせてserverIdも受け取る（旧フロントは送らないのでオプション）
+    const { receiverIds, title, body, roomId, serverId, appId, senderId } = await request.json();
     if (!receiverIds || !title || !appId) {
       return new Response(JSON.stringify({ success: false, error: "Missing fields" }), { status: 400, headers: corsHeaders });
     }
@@ -243,8 +200,11 @@ async function handleSendNotification(request, env) {
     for (const rid of receiverIds) {
         if (rid === senderId) continue; // 自分には送らない
 
-        // 1. 相手のステータスを取得
-        const statusUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/status/${rid}`;
+        // 1. 相手のステータスを取得（サーバーベース or 旧パス）
+        const statusPath = serverId 
+          ? `artifacts/${appId}/servers/${serverId}/status/${rid}`
+          : `artifacts/${appId}/status/${rid}`;
+        const statusUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${statusPath}`;
         const statusRes = await fetch(statusUrl, { headers: { "Authorization": `Bearer ${workerToken}` } });
         const statusData = await statusRes.json();
         
@@ -260,7 +220,7 @@ async function handleSendNotification(request, env) {
         }
 
         if (shouldSend) {
-            // 2. 相手の FCM トークンを取得
+            // 2. 相手の FCM トークンを取得（グローバルユーザー情報から）
             const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/users/${rid}`;
             const userRes = await fetch(userUrl, { headers: { "Authorization": `Bearer ${workerToken}` } });
             const userData = await userRes.json();
@@ -272,9 +232,6 @@ async function handleSendNotification(request, env) {
                 for (const t of tokens) {
                     const tokenStr = t.stringValue;
                     
-                    // FCM V1 API: data ペイロードのみ送信（Service Workerでの確実な受信のため）
-                    // notification ペイロードを含めると、ブラウザが自動で通知を出し
-                    // Service Workerの onBackgroundMessage が呼ばれないケースがある
                     const fcmRes = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
                         method: "POST",
                         headers: {
@@ -288,6 +245,7 @@ async function handleSendNotification(request, env) {
                                     title: title,
                                     body: body,
                                     roomId: roomId || "",
+                                    serverId: serverId || "",
                                     senderId: senderId || "",
                                     type: "chat_message"
                                 },
@@ -323,7 +281,7 @@ async function handleSendNotification(request, env) {
                                         body: body,
                                         icon: "/icon-192x192.png",
                                         badge: "/icon-192x192.png",
-                                        tag: roomId || "simplechat",
+                                        tag: `${serverId}_${roomId}`,
                                         renotify: true
                                     },
                                     headers: {
@@ -340,7 +298,6 @@ async function handleSendNotification(request, env) {
                     const fcmResult = await fcmRes.json();
                     if (fcmResult.error) {
                         console.error("FCM Send Error:", fcmResult.error);
-                        // 無効なトークン（UNREGISTERED / NOT_FOUND）は削除対象に追加
                         const errorCode = fcmResult.error.details?.[0]?.errorCode || fcmResult.error.code;
                         if (errorCode === 'UNREGISTERED' || errorCode === 404 || 
                             fcmResult.error.status === 'NOT_FOUND' ||
@@ -449,7 +406,7 @@ async function handleSetOffline(request, env) {
   try {
     const bodyText = await request.text();
     const data = JSON.parse(bodyText);
-    const { userId, appId } = data;
+    const { userId, serverId, appId } = data;
     
     if (!userId || !appId) {
       return new Response("Missing fields", { status: 400, headers: corsHeaders });
@@ -460,8 +417,12 @@ async function handleSetOffline(request, env) {
 
     const projectId = env.FIREBASE_PROJECT_ID;
 
-    // state を直接 offline に設定
-    const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/status/${userId}?updateMask.fieldPaths=state&updateMask.fieldPaths=last_changed`;
+    // サーバーベースの場合は servers/{serverId}/status, 旧パスは status/{userId}
+    const statusPath = serverId
+      ? `artifacts/${appId}/servers/${serverId}/status/${userId}`
+      : `artifacts/${appId}/status/${userId}`;
+
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${statusPath}?updateMask.fieldPaths=state&updateMask.fieldPaths=last_changed`;
     await fetch(docUrl, {
       method: "PATCH",
       headers: {
@@ -479,6 +440,65 @@ async function handleSetOffline(request, env) {
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
   } catch (error) {
     console.error("setOffline Error:", error);
+    return new Response(JSON.stringify({ success: false, error: error.toString() }), { status: 500, headers: corsHeaders });
+  }
+}
+
+// -------------------------------------------------------------
+// 旧フロントエンド互換: ルーム参加処理
+// -------------------------------------------------------------
+async function handleJoinRoomLegacy(request, env) {
+  try {
+    const { roomId, password, userId, appId } = await request.json();
+    if (!roomId || !password || !userId || !appId) {
+      return new Response(JSON.stringify({ success: false, error: "Missing fields" }), { status: 400, headers: corsHeaders });
+    }
+
+    const workerToken = await getWorkerAuthToken(env);
+    if (!workerToken) return new Response(JSON.stringify({ success: false, error: "Worker Auth failed" }), { status: 500, headers: corsHeaders });
+
+    const projectId = env.FIREBASE_PROJECT_ID;
+    const pwdUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/public/data/rooms/${roomId}/secrets/password`;
+    
+    const pwdRes = await fetch(pwdUrl, {
+      method: "GET",
+      headers: { "Authorization": `Bearer ${workerToken}` }
+    });
+    const pwdData = await pwdRes.json();
+    
+    if (pwdData.error) {
+      return new Response(JSON.stringify({ success: false, error: "Room not found" }), { status: 404, headers: corsHeaders });
+    }
+
+    const actualPassword = pwdData.fields?.password?.stringValue;
+    if (password !== actualPassword) {
+      return new Response(JSON.stringify({ success: false, error: "Incorrect password" }), { status: 401, headers: corsHeaders });
+    }
+
+    const transformUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+    const transformBody = {
+      writes: [{
+        transform: {
+          document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/public/data/rooms/${roomId}`,
+          fieldTransforms: [{
+            fieldPath: "joinedUsers",
+            appendMissingElements: { values: [{ stringValue: userId }] }
+          }]
+        }
+      }]
+    };
+
+    await fetch(transformUrl, {
+      method: "POST",
+      headers: { 
+        "Authorization": `Bearer ${workerToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(transformBody)
+    });
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+  } catch (error) {
     return new Response(JSON.stringify({ success: false, error: error.toString() }), { status: 500, headers: corsHeaders });
   }
 }

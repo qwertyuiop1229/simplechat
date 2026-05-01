@@ -1,1397 +1,4 @@
-<!DOCTYPE html>
-<html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chat App</title>
-    <!-- ここにnoindexメタタグを追加してGoogle検索からのインデックス登録を防ぎます -->
-    <meta name="robots" content="noindex, nofollow" />
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#3b82f6" />
-    <link rel="apple-touch-icon" href="icon-192x192.png" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <!-- FontAwesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-      /* --- 全画面化用 --- */
-      html,
-      body {
-        height: 100%;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-        background-color: #f3f4f6;
-        font-family: "Inter", sans-serif;
-        /* メッセージ入力欄以外での文字選択を無効化 */
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-      }
-      /* 入力フィールドでのみ文字選択を許可 */
-      textarea, input[type="text"], input[type="email"], input[type="password"] {
-        -webkit-user-select: text;
-        -moz-user-select: text;
-        -ms-user-select: text;
-        user-select: text;
-      }
-      .container {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-        max-width: none;
-        height: 100vh;
-        min-height: 100vh;
-        margin: 0;
-        padding: 0;
-        border-radius: 0;
-        overflow: hidden;
-        background-color: #ffffff;
-        box-shadow: none;
-      }
 
-      .message-bubble {
-        max-width: 75%;
-        padding: 0.75rem 1rem;
-        border-radius: 1rem;
-        margin-bottom: 0.5rem;
-        word-wrap: break-word;
-        -webkit-touch-callout: none; /* iOS長押しメニュー防止 */
-      }
-      .my-message {
-        background-color: #e0e0e0; /* 薄いグレー */
-        border-bottom-right-radius: 0.25rem;
-      }
-      .other-message {
-        background-color: #f0f0f0; /* 非常に薄いグレー */
-        border-bottom-left-radius: 0.25rem;
-      }
-      .scrollable {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      /* カスタムスクロールバー */
-      .scrollable::-webkit-scrollbar {
-        width: 6px;
-      }
-      .scrollable::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .scrollable::-webkit-scrollbar-thumb {
-        background: #ccc;
-        border-radius: 10px;
-      }
-      .scrollable::-webkit-scrollbar-thumb:hover {
-        background: #999;
-      }
-      /* モーダル背景 */
-      .modal-overlay {
-        background-color: rgba(0, 0, 0, 0.75);
-      }
-      /* ドロップダウンコンテナのスタイル */
-      .dropdown-container {
-        position: relative;
-        display: inline-block;
-      }
-      .dropdown-content {
-        display: none;
-        position: absolute;
-        background-color: white;
-        min-width: 100px;
-        box-shadow: 0px 4px 8px 0px rgba(0, 0, 0, 0.2);
-        z-index: 10;
-        right: 0;
-        border-radius: 0.5rem;
-        overflow: hidden;
-        border: 1px solid #ddd;
-      }
-      .dropdown-content button {
-        color: black;
-        padding: 8px 12px;
-        text-decoration: none;
-        display: block;
-        width: 100%;
-        text-align: left;
-        border: none;
-        background-color: transparent;
-        cursor: pointer;
-        transition: background-color 0.2s;
-        font-size: 0.875rem;
-      }
-      .dropdown-content button:hover {
-        background-color: #f0f0f0;
-      }
-
-      /* メッセージ内容と入力欄 */
-      .message-content {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        word-break: break-word;
-      }
-      textarea#messageInput {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        word-break: break-word;
-        overflow-y: auto;
-        resize: none;
-        min-height: 44px;
-        max-height: 200px;
-        background-color: #f3f4f6;
-        border: 1px solid #e5e7eb;
-        
-        /* ★スクロールバーを非表示にする設定 */
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
-      }
-      /* ★Chrome, Safari, Opera用 */
-      textarea#messageInput::-webkit-scrollbar {
-        display: none;
-      }
-      
-      textarea#messageInput:focus {
-        background-color: #f3f4f6;
-        outline: none;
-      }
-
-      /* 既読表示 */
-      .read-receipt {
-        font-size: 0.7rem;
-        color: #888;
-        margin-top: 2px;
-        display: block;
-        text-align: right;
-      }
-      .other-message .read-receipt {
-        text-align: left;
-      }
-
-      /* カスタムコンテキストメニュー */
-      .custom-context-menu {
-        position: absolute;
-        background-color: white;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-        user-select: none;
-        border: 1px solid #ddd;
-        border-radius: 0.5rem;
-        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);
-        z-index: 100;
-        padding: 4px 0;
-        min-width: 120px;
-      }
-      .custom-context-menu button {
-        display: block;
-        width: 100%;
-        padding: 8px 12px;
-        text-align: left;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 0.875rem;
-        color: black;
-      }
-      .custom-context-menu button:hover {
-        background-color: #f0f0f0;
-      }
-
-      /* サイドバーリサイズ用ハンドル */
-      #resizer {
-        width: 2px;
-        cursor: col-resize;
-        background-color: #e5e7eb;
-        transition: background-color 0.2s;
-        flex-shrink: 0;
-      }
-      #resizer:hover {
-        background-color: #d1d5db;
-      }
-
-      /* リプライ機能用CSS */
-      .reply-quote {
-        background-color: rgba(0, 0, 0, 0.05);
-        padding: 6px 10px;
-        border-radius: 8px;
-        margin-bottom: 6px;
-        cursor: pointer;
-        font-size: 0.875rem;
-      }
-      .reply-quote-nickname {
-        font-size: 0.75rem;
-        color: #555;
-        font-weight: 600;
-      }
-      .reply-quote-text {
-        color: #333;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .message-highlight {
-        transition: background-color 0.8s ease-out;
-        background-color: #bde4ff !important;
-      }
-
-      /* --- メンバーリスト用スタイル (Discord風) --- */
-      #membersSidebar {
-        width: 240px;
-        background-color: #f9fafb;
-        border-left: 1px solid #e5e7eb;
-        display: flex;
-        flex-direction: column;
-        flex-shrink: 0;
-      }
-      .member-group-title {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #9ca3af;
-        text-transform: uppercase;
-        padding: 1rem 1rem 0.5rem 1rem;
-        letter-spacing: 0.05em;
-      }
-      .member-item {
-        display: flex;
-        align-items: center;
-        padding: 0.5rem 1rem;
-        cursor: pointer;
-        transition: background-color 0.1s;
-        border-radius: 0.25rem;
-        margin: 0 0.5rem;
-      }
-      .member-item:hover {
-        background-color: #e5e7eb;
-      }
-      .avatar-placeholder {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background-color: #374151;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.875rem;
-        font-weight: 600;
-        margin-right: 0.75rem;
-        position: relative;
-        flex-shrink: 0;
-      }
-      .avatar-placeholder img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 50%;
-      }
-      /* ステータスバッジ */
-      .status-indicator {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        position: absolute;
-        bottom: -1px;
-        right: -1px;
-        border: 2px solid #f9fafb;
-      }
-      .status-online { background-color: #22c55e; }
-      .status-away { background-color: #facc15; }
-      .status-offline { background-color: #9ca3af; }
-      
-      .member-info {
-        flex: 1;
-        overflow: hidden;
-      }
-      .member-name {
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: #1f2937;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .member-status-text {
-        font-size: 0.7rem;
-        color: #6b7280;
-      }
-
-      /* ユーザーパネル (Discord風マイページ) */
-      #userPanel {
-        background-color: #ebedef; /* サイドバーより少し濃いグレー */
-        padding: 0.75rem;
-        display: flex;
-        align-items: center;
-        border-top: 1px solid #d1d5db;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-      #userPanel:hover {
-        background-color: #e5e7eb;
-      }
-      .user-panel-info {
-        flex: 1;
-        overflow: hidden;
-        margin-right: 0.5rem;
-      }
-      .user-panel-name {
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: #1f2937;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .user-panel-id {
-        font-size: 0.75rem;
-        color: #6b7280;
-      }
-
-      /* スマホ対応CSS - LINE風UI */
-      @media (max-width: 767px) {
-        body { padding: 0; }
-        .container {
-          height: 100vh;
-          padding: 0;
-          border-radius: 0;
-        }
-        .container > div { flex-direction: column; }
-        #appContainer { flex-direction: column; position: relative; }
-
-        #sidebar {
-          width: 100% !important;
-          height: 100%;
-          position: absolute;
-          top: 0; left: 0;
-          z-index: 10;
-          background: white;
-        }
-        #resizer { display: none; }
-        #membersSidebar { display: none; }
-
-        /* サイドバーが非表示時はチャットエリアがフル表示 */
-        #sidebar.mobile-hidden { display: none !important; }
-
-        #roomList {
-          flex: 1;
-          overflow-y: auto;
-          border-bottom: none;
-        }
-        #messagesDisplay {
-          flex: 1;
-          min-height: 0;
-        }
-        .my-message, .other-message { max-width: 85%; }
-        
-        /* スマホではユーザーパネルを大きく */
-        #userPanel {
-            padding: 1rem;
-        }
-
-        /* スマホ用の戻るボタン */
-        #mobileBackButton {
-          display: flex !important;
-        }
-
-        /* スマホで入力欄を画面下部に固定 */
-        #messageInputArea {
-          border-top: 1px solid #e5e7eb;
-        }
-
-        /* iPhoneでの勝手なズーム拡大を防止 */
-        input, textarea, select {
-          font-size: 16px !important;
-        }
-
-        /* メンバー一覧のボトムシート対応 */
-        #bottomSheetOverlay {
-          display: none;
-          position: fixed;
-          inset: 0;
-          background-color: rgba(0,0,0,0.5);
-          z-index: 40;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-        #bottomSheetOverlay.show {
-          display: block;
-          opacity: 1;
-        }
-
-        #membersSidebar {
-          display: flex !important; /* Tailwindの hidden md:flex を上書き */
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          height: 70vh;
-          background-color: white;
-          z-index: 50;
-          border-radius: 1rem 1rem 0 0;
-          box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
-          transform: translateY(100%);
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          flex-direction: column;
-          border-left: none; /* PC用のボーダーを消す */
-        }
-        
-        #membersSidebar.bottom-sheet-open {
-          transform: translateY(0);
-        }
-
-        /* ボトムシートのドラッグハンドル */
-        #bottomSheetHandle {
-          display: flex;
-          justify-content: center;
-          padding: 12px 0;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-        #bottomSheetHandle::after {
-          content: "";
-          width: 40px;
-          height: 5px;
-          background-color: #d1d5db;
-          border-radius: 3px;
-        }
-      }
-      @media (min-width: 768px) {
-        #mobileBackButton { display: none !important; }
-        #bottomSheetOverlay { display: none !important; }
-        #bottomSheetHandle { display: none !important; }
-      }
-
-      /* 強制上書き */
-      html, body {
-        height: 100% !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .container {
-        width: 100% !important;
-        max-width: none !important;
-        height: 100vh !important;
-        min-height: 100vh !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-      }
-      /* --- 追加機能用スタイル --- */
-      /* メンションのハイライト */
-      .mention-highlight {
-        background-color: #fef08a !important;
-        border: 1px solid #eab308;
-      }
-      .mention-text {
-        color: #1d4ed8;
-        font-weight: bold;
-      }
-      /* ピン留めエリア */
-      #pinnedMessagesArea {
-        border-bottom: 2px solid #e5e7eb;
-        background-color: #f8fafc;
-        padding: 0.5rem;
-        max-height: 120px;
-        overflow-y: auto;
-      }
-      .pinned-message-item {
-        font-size: 0.8rem;
-        padding: 6px;
-        background: white;
-        border-radius: 4px;
-        margin-bottom: 4px;
-        border-left: 4px solid #f59e0b;
-        cursor: pointer;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-      }
-      .pinned-message-item:hover { background-color: #f1f5f9; }
-      /* 未読バッジ */
-      .unread-badge {
-        background-color: #ef4444;
-        color: white;
-        font-size: 0.7rem;
-        font-weight: 700;
-        min-width: 18px;
-        height: 18px;
-        border-radius: 9px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 5px;
-        margin-left: 6px;
-        flex-shrink: 0;
-      }
-      /* 検索バー */
-      #searchContainer {
-        padding: 0.5rem;
-        background: #f3f4f6;
-        border-bottom: 1px solid #e5e7eb;
-      }
-      #searchContainer input {
-        background-color: #fff;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        color: #374151;
-        font-size: 16px; /* スマホでの自動拡大防止のため16pxに固定 */
-        padding: 0.5rem 0.75rem;
-      }
-      #searchContainer input:focus {
-        border-color: #9ca3af;
-        outline: none;
-      }
-      /* ドラッグ＆ドロップオーバーレイ */
-      #dropOverlay {
-        position: absolute;
-        inset: 0;
-        background-color: rgba(255, 255, 255, 0.92);
-        border: 2px dashed #000;
-        z-index: 20;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        pointer-events: none;
-      }
-      #dropOverlay.active {
-        display: flex;
-      }
-      /* 入力欄アクションボタン */
-      .input-action-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: #888;
-        font-size: 1rem;
-        padding: 6px 8px;
-        border-radius: 4px;
-        transition: color 0.15s, background-color 0.15s;
-      }
-      .input-action-btn:hover:not(:disabled) {
-        color: #000;
-        background-color: #f0f0f0;
-      }
-      .input-action-btn:disabled {
-        color: #ccc;
-        cursor: not-allowed;
-      }
-      /* メンションポップアップ */
-      #mentionPopup {
-        position: absolute;
-        bottom: 100%;
-        left: 0;
-        background: white;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        max-height: 180px;
-        overflow-y: auto;
-        z-index: 30;
-        width: 220px;
-        margin-bottom: 8px;
-      }
-      #mentionPopup .mention-option {
-        padding: 10px 14px;
-        cursor: pointer;
-        font-size: 0.875rem;
-        color: #374151;
-        border-bottom: 1px solid #f3f4f6;
-        transition: background-color 0.2s;
-      }
-      #mentionPopup .mention-option:last-child {
-        border-bottom: none;
-      }
-      #mentionPopup .mention-option:hover {
-        background-color: #f3f4f6;
-      }
-      /* === アップデートオーバーレイ === */
-      #updateOverlay {
-        position: fixed;
-        inset: 0;
-        z-index: 99999;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #1e3a5f 100%);
-        flex-direction: column;
-      }
-      #updateOverlay.show {
-        display: flex;
-      }
-      .update-card {
-        background: rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 1.5rem;
-        padding: 3rem;
-        max-width: 440px;
-        width: 90%;
-        text-align: center;
-        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
-        animation: updateCardFadeIn 0.6s ease-out;
-      }
-      @keyframes updateCardFadeIn {
-        from { opacity: 0; transform: translateY(30px) scale(0.95); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-      }
-      .update-icon {
-        width: 64px;
-        height: 64px;
-        margin: 0 auto 1.5rem;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        border-radius: 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.75rem;
-        color: white;
-        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
-      }
-      .update-title {
-        color: white;
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-      }
-      .update-version {
-        color: #93c5fd;
-        font-size: 0.95rem;
-        margin-bottom: 1.25rem;
-      }
-      .update-body {
-        color: #cbd5e1;
-        font-size: 0.85rem;
-        line-height: 1.6;
-        margin-bottom: 2rem;
-        max-height: 120px;
-        overflow-y: auto;
-        text-align: left;
-        padding: 0.75rem;
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 0.75rem;
-      }
-      .update-btn {
-        width: 100%;
-        padding: 0.9rem;
-        border: none;
-        border-radius: 0.75rem;
-        font-size: 1rem;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.2s;
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
-        color: white;
-        box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
-      }
-      .update-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.5);
-      }
-      .update-btn:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none;
-      }
-      .update-progress {
-        margin-top: 1rem;
-        color: #93c5fd;
-        font-size: 0.85rem;
-        display: none;
-      }
-      .update-progress.show {
-        display: block;
-      }
-      .update-spinner {
-        display: inline-block;
-        width: 16px;
-        height: 16px;
-        border: 2px solid rgba(255,255,255,0.3);
-        border-top-color: #93c5fd;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        margin-right: 8px;
-        vertical-align: middle;
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-
-      /* === 設定トグルスイッチ === */
-      .setting-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 0;
-        border-bottom: 1px solid #f3f4f6;
-      }
-      .setting-row:last-child { border-bottom: none; }
-      .setting-label {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.9rem;
-        color: #374151;
-      }
-      .setting-label i { width: 18px; text-align: center; color: #6b7280; }
-      .toggle-switch {
-        position: relative;
-        width: 44px;
-        height: 24px;
-        flex-shrink: 0;
-      }
-      .toggle-switch input { opacity: 0; width: 0; height: 0; }
-      .toggle-slider {
-        position: absolute;
-        inset: 0;
-        background-color: #d1d5db;
-        border-radius: 24px;
-        cursor: pointer;
-        transition: background-color 0.25s;
-      }
-      .toggle-slider::before {
-        content: "";
-        position: absolute;
-        width: 18px;
-        height: 18px;
-        left: 3px;
-        bottom: 3px;
-        background: white;
-        border-radius: 50%;
-        transition: transform 0.25s;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      }
-      .toggle-switch input:checked + .toggle-slider {
-        background-color: #374151;
-      }
-      .toggle-switch input:checked + .toggle-slider::before {
-        transform: translateX(20px);
-      }
-
-      /* === PWAインストールバナー === */
-      #pwaInstallBanner {
-        display: none;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 9998;
-        background: linear-gradient(135deg, #1e293b, #334155);
-        color: white;
-        padding: 14px 16px;
-        align-items: center;
-        gap: 12px;
-        box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-        animation: bannerSlideUp 0.4s ease-out;
-      }
-      #pwaInstallBanner.show { display: flex; }
-      @keyframes bannerSlideUp {
-        from { transform: translateY(100%); }
-        to { transform: translateY(0); }
-      }
-      .pwa-banner-icon {
-        width: 40px; height: 40px; border-radius: 10px;
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.2rem; flex-shrink: 0;
-      }
-      .pwa-banner-text { flex: 1; min-width: 0; }
-      .pwa-banner-text strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
-      .pwa-banner-text span { font-size: 0.75rem; color: #94a3b8; }
-      .pwa-banner-btn {
-        background: white; color: #1e293b; border: none; border-radius: 8px;
-        padding: 8px 16px; font-weight: 700; font-size: 0.85rem;
-        cursor: pointer; flex-shrink: 0; transition: opacity 0.2s;
-      }
-      .pwa-banner-btn:hover { opacity: 0.85; }
-      .pwa-banner-close {
-        background: none; border: none; color: #94a3b8; font-size: 1rem;
-        cursor: pointer; padding: 4px; flex-shrink: 0;
-      }
-      .settings-modal-container {
-        max-height: 85vh; /* 画面が小さくても見切れないように高さを制限 */
-        overflow-y: auto; /* 縦スクロールを有効化 */
-        padding-top: 20px;
-        padding-bottom: 20px;
-      }
-    </style>
-  </head>
-  <!-- Google tag (gtag.js) -->
-  <script
-    async
-    src="https://www.googletagmanager.com/gtag/js?id=G-RY7DKH85XG"
-  ></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() {
-      dataLayer.push(arguments);
-    }
-    gtag("js", new Date());
-    gtag("config", "G-RY7DKH85XG");
-  </script>
-  <body>
-    <!-- アップデートオーバーレイ（ブロッキング） -->
-    <div id="updateOverlay">
-      <div class="update-card">
-        <div class="update-icon"><i class="fas fa-arrow-up"></i></div>
-        <div class="update-title">アップデートがあります</div>
-        <div class="update-version" id="updateVersionText">新しいバージョンが利用可能です</div>
-        <div class="update-body" id="updateBodyText"></div>
-        <button class="update-btn" id="updateButton" onclick="performUpdate()">
-          <i class="fas fa-download"></i>&nbsp;&nbsp;アップデートする
-        </button>
-        <div class="update-progress" id="updateProgress">
-          <span class="update-spinner"></span>
-          <span id="updateProgressText">ダウンロード中...</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- PWAインストールバナー -->
-    <div id="pwaInstallBanner">
-      <div class="pwa-banner-icon"><i class="fas fa-comment-dots"></i></div>
-      <div class="pwa-banner-text">
-        <strong>SimpleChatをインストール</strong>
-        <span id="pwaInstallHint">ホーム画面に追加して通知を受け取ろう</span>
-      </div>
-      <button class="pwa-banner-btn" id="pwaInstallButton">インストール</button>
-      <button class="pwa-banner-close" id="pwaInstallClose"><i class="fas fa-times"></i></button>
-    </div>
-    <div
-      id="loadingOverlay"
-      class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden"
-    >
-      <div class="text-white text-xl">読み込み中...</div>
-    </div>
-
-    <div class="container">
-      <!-- ヘッダー -->
-      <div
-        class="bg-gray-800 text-white p-4 flex justify-center items-center shadow-md flex-shrink-0"
-      >
-        <!-- タイトルをニックネーム表示用に変更（中央寄せ、小さめ） -->
-        <h1 class="text-sm font-medium" id="headerTitle"></h1>
-      </div>
-
-      <!-- メインコンテンツエリア -->
-      <div
-        id="mainContent"
-        class="flex flex-1 overflow-hidden flex-col md:flex-row"
-      >
-        <!-- 認証フォーム -->
-        <div id="authContainer" class="flex-1 flex flex-col items-center justify-center p-4 md:p-8 hidden w-full">
-          <div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-            
-            <!-- タブ -->
-            <div class="flex mb-6 border-b border-gray-300">
-              <button id="tabLogin" class="flex-1 pb-2 font-bold text-gray-800 border-b-2 border-gray-800 transition-colors">ログイン</button>
-              <button id="tabSignup" class="flex-1 pb-2 font-bold text-gray-400 border-b-2 border-transparent transition-colors">新規登録</button>
-            </div>
-
-            <!-- ログインフォーム -->
-            <div id="loginFormArea">
-              <input type="email" id="emailInput" placeholder="メールアドレス" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none" />
-              <input type="password" id="passwordInput" placeholder="パスワード" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none" />
-              <button id="authButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors duration-200 mb-4">ログイン</button>
-            </div>
-
-            <!-- 新規登録フォーム -->
-            <div id="signupFormArea" class="hidden">
-              <p class="text-sm text-gray-600 mb-4 text-center">※管理者から許可されたメールアドレスのみ登録可能です。</p>
-              <input type="email" id="signupEmailInput" placeholder="許可されたメールアドレス" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none" />
-              <input type="password" id="signupPasswordInput" placeholder="新規パスワードを設定" class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none" />
-              <button id="signupButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg transition-colors duration-200 mb-4">アカウント作成</button>
-            </div>
-
-            <div id="authMessage" class="text-red-600 text-center mt-2"></div>
-          </div>
-        </div>
-
-        <!-- ニックネーム設定コンテナ (初回用) -->
-        <div
-          id="nicknameContainer"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
-          >
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">
-              ニックネームを設定
-            </h2>
-            <p class="text-gray-600 mb-4">一度設定すると変更できません。</p>
-            <input
-              type="text"
-              id="nicknameInput"
-              placeholder="ニックネームを入力"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <button
-              id="setNicknameButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
-            >
-              ニックネームを決定
-            </button>
-            <div
-              id="nicknameMessage"
-              class="text-red-600 text-center mt-4"
-            ></div>
-          </div>
-        </div>
-
-        <!-- 設定モーダル (マイページ) -->
-        <div
-          id="settingsModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative"
-          >
-            <!-- 閉じるボタンを右上に絶対配置 -->
-            <button id="closeSettingsButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-
-            <div class="settings-modal-container px-2">
-              <!-- タイトルを中央寄せに変更 -->
-              <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">アカウント設定</h2>
-              
-              <div class="flex flex-col items-center mb-6">
-                  <div class="w-20 h-20 rounded-full bg-gray-700 text-white flex items-center justify-center text-3xl font-bold mb-2 relative cursor-pointer" id="avatarUploadTrigger">
-                      <span id="settingsAvatarText"></span>
-                      <img id="settingsAvatarPreview" src="" class="absolute inset-0 w-full h-full object-cover rounded-full hidden" />
-                      <div class="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs shadow-md z-10 pointer-events-none border-2 border-white">
-                          <i class="fas fa-pencil-alt"></i>
-                      </div>
-                      <input type="file" id="avatarUploadInput" accept="image/*" class="hidden" />
-                  </div>
-                  <p class="text-xs text-gray-500 mt-1">クリックしてアイコンを変更</p>
-                  <button id="resetAvatarButton" class="mt-2 px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-md transition-colors duration-200 hidden">
-                      <i class="fas fa-undo mr-1"></i>アイコンをリセット
-                  </button>
-              </div>
-
-              <div class="mb-6">
-                  <label class="block text-gray-700 text-sm font-bold mb-2" for="settingsNicknameInput">
-                      ニックネーム
-                  </label>
-                  <input
-                    type="text"
-                    id="settingsNicknameInput"
-                    class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none"
-                  />
-              </div>
-
-              <!-- ブラウザ版通知設定 (非Tauri時のみ表示) -->
-              <div id="browserSettingsContainer" class="border-t pt-4 mt-4">
-                  <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
-                      <i class="fas fa-bell mr-1"></i> 通知設定
-                  </h3>
-                  <div class="setting-row">
-                      <div class="setting-label"><i class="fas fa-comment-dots"></i> ブラウザ通知</div>
-                      <label class="toggle-switch">
-                          <input type="checkbox" id="toggleBrowserNotif" checked>
-                          <span class="toggle-slider"></span>
-                      </label>
-                  </div>
-              </div>
-
-              <div class="flex justify-between items-center border-t pt-4 gap-4 mt-4">
-                  <button
-                    id="logoutButtonInModal"
-                    class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg transition-colors duration-200"
-                  >
-                    ログアウト
-                  </button>
-                  <button
-                    id="saveSettingsButton"
-                    class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200"
-                  >
-                    保存
-                  </button>
-              </div>
-              
-              <!-- 管理者設定ボタン (管理者のみ表示) -->
-              <div id="adminPanelContainer" class="border-t pt-4 mt-4 hidden">
-                  <button id="openAdminModalButton" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
-                      <i class="fas fa-user-shield mr-2"></i>管理者設定を開く
-                  </button>
-              </div>
-
-              <!-- デスクトップアプリ設定 (Windows版のみ表示) -->
-              <div id="desktopSettingsContainer" class="border-t pt-4 mt-4 hidden">
-                  <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">
-                      <i class="fas fa-desktop mr-1"></i> アプリ設定
-                  </h3>
-                  <div class="setting-row">
-                      <div class="setting-label"><i class="fas fa-volume-up"></i> 通知音</div>
-                      <label class="toggle-switch">
-                          <input type="checkbox" id="toggleNotifSound" checked>
-                          <span class="toggle-slider"></span>
-                      </label>
-                  </div>
-                  <div class="setting-row">
-                      <div class="setting-label"><i class="fas fa-comment-dots"></i> デスクトップ通知</div>
-                      <label class="toggle-switch">
-                          <input type="checkbox" id="toggleDesktopNotif" checked>
-                          <span class="toggle-slider"></span>
-                      </label>
-                  </div>
-                  <div class="setting-row">
-                      <div class="setting-label"><i class="fas fa-rocket"></i> PC起動時に起動</div>
-                      <label class="toggle-switch">
-                          <input type="checkbox" id="toggleAutoStart">
-                          <span class="toggle-slider"></span>
-                      </label>
-                  </div>
-              </div>
-
-              <div id="settingsMessage" class="text-center mt-2 text-sm"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 管理者モーダル (Admin Panel) -->
-        <div id="adminModal" class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden">
-          <div class="bg-white p-8 rounded-lg w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
-            <button id="closeAdminModalButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center"><i class="fas fa-shield-alt mr-2"></i>管理者パネル</h2>
-            
-            <div class="mb-6">
-                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">許可リスト（招待されたメールアドレス）</h3>
-                <div class="flex mb-2">
-                    <input type="email" id="newAllowedEmailInput" placeholder="追加するメールアドレス" class="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none" />
-                    <button id="addAllowedEmailButton" class="bg-gray-800 hover:bg-gray-700 text-white px-4 rounded-r-lg font-bold transition-colors">追加</button>
-                </div>
-                <div id="allowedEmailsList" class="bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
-                    <!-- 動的に追加 -->
-                </div>
-            </div>
-
-            <div class="mb-4">
-                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3">管理者リスト</h3>
-                <div class="flex mb-2">
-                    <input type="email" id="newAdminEmailInput" placeholder="管理者にするメールアドレス" class="flex-1 p-2 border border-gray-300 rounded-l-lg focus:outline-none" />
-                    <button id="addAdminEmailButton" class="bg-gray-800 hover:bg-gray-700 text-white px-4 rounded-r-lg font-bold transition-colors">追加</button>
-                </div>
-                <div id="adminEmailsList" class="bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
-                    <!-- 動的に追加 -->
-                </div>
-            </div>
-            <div id="adminMessage" class="text-center text-sm font-bold mt-2"></div>
-          </div>
-        </div>
-
-
-        <!-- 各種モーダル -->
-        <div
-          id="createRoomPasswordModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
-          >
-            <h2 class="text-2xl font-bold mb-6 text-gray-800">
-              新しいルームを作成
-            </h2>
-            <input
-              type="text"
-              id="modalNewRoomNameInput"
-              placeholder="ルーム名を入力"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <input
-              type="password"
-              id="newRoomPasswordInput"
-              placeholder="パスワードを入力 (任意)"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <button
-              id="confirmCreateRoomButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
-            >
-              ルームを作成
-            </button>
-            <button
-              id="cancelCreateRoomButton"
-              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md mt-2 transition-colors duration-200"
-            >
-              キャンセル
-            </button>
-            <div
-              id="createRoomPasswordMessage"
-              class="text-red-600 text-center mt-4"
-            ></div>
-          </div>
-        </div>
-
-        <div
-          id="joinRoomPasswordModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
-          >
-            <h2
-              class="text-2xl font-bold mb-6 text-gray-800"
-              id="joinRoomTitle"
-            >
-              ルームに参加
-            </h2>
-            <input
-              type="password"
-              id="joinRoomPasswordInput"
-              placeholder="パスワードを入力"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <button
-              id="confirmJoinRoomButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
-            >
-              参加
-            </button>
-            <button
-              id="cancelJoinRoomButton"
-              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md mt-2 transition-colors duration-200"
-            >
-              キャンセル
-            </button>
-            <div
-              id="joinRoomPasswordMessage"
-              class="text-red-600 text-center mt-4"
-            ></div>
-          </div>
-        </div>
-
-        <div
-          id="deleteRoomConfirmModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
-          >
-            <h2
-              class="text-2xl font-bold mb-6 text-gray-800"
-              id="deleteConfirmTitle"
-            >
-              確認
-            </h2>
-            <p class="text-gray-600 mb-4" id="deleteConfirmMessage">
-              本当に「<span id="roomToDeleteName" class="font-bold"></span
-              >」ルームを削除しますか？
-            </p>
-            <button
-              id="confirmDeleteButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-2"
-            >
-              削除
-            </button>
-            <button
-              id="cancelDeleteButton"
-              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
-            >
-              キャンセル
-            </button>
-            <div
-              id="deleteConfirmErrorMessage"
-              class="text-red-600 text-center mt-4"
-            ></div>
-          </div>
-        </div>
-
-        <div
-          id="deleteRoomPasswordModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-40 hidden"
-        >
-          <div
-            class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center"
-          >
-            <h2
-              class="text-2xl font-bold mb-6 text-gray-800"
-              id="deletePasswordTitle"
-            >
-              ルームのパスワード
-            </h2>
-            <p class="text-gray-600 mb-4" id="deletePasswordMessage">
-              ルーム「<span
-                id="roomToDeletePasswordName"
-                class="font-bold"
-              ></span
-              >」を削除するにはパスワードを入力してください。
-            </p>
-            <input
-              type="password"
-              id="deleteRoomPasswordInput"
-              placeholder="パスワードを入力"
-              class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none"
-            />
-            <button
-              id="confirmDeletePasswordButton"
-              class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg shadow-md transition-colors duration-200 mb-2"
-            >
-              削除
-            </button>
-            <button
-              id="cancelDeletePasswordButton"
-              class="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 rounded-lg shadow-md transition-colors duration-200"
-            >
-              キャンセル
-            </button>
-            <div
-              id="deletePasswordErrorMessage"
-              class="text-red-600 text-center mt-4"
-            ></div>
-          </div>
-        </div>
-
-        <!-- チャットアプリ本体 -->
-        <div id="appContainer" class="flex flex-1 hidden flex-col md:flex-row w-full h-full">
-          <!-- ルームリストサイドバー -->
-          <div id="sidebar" class="bg-gray-100 flex flex-col flex-shrink-0" style="width: 250px;">
-            <!-- ルームリスト -->
-            <div id="roomList" class="flex-1 scrollable p-4 pb-0">
-              <!-- ルームはここに動的に追加されます -->
-            </div>
-            
-            <!-- ルーム作成ボタンエリア -->
-            <div class="p-4 pt-2 pb-2">
-                <button
-                  id="promptCreateRoomButton"
-                  class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded-lg shadow-sm transition-colors duration-200"
-                >
-                  <i class="fas fa-plus mr-2"></i>ルームを作成
-                </button>
-            </div>
-
-            <!-- ユーザー情報パネル (Discord風マイページボタン) -->
-            <div id="userPanel" class="mt-auto">
-                <div class="avatar-placeholder" id="userPanelAvatar" style="width: 38px; height: 38px; margin-right: 10px;">
-                    <!-- イニシャル -->
-                    <div class="status-indicator status-online" id="userPanelStatus"></div>
-                </div>
-                <div class="user-panel-info">
-                    <div class="user-panel-name" id="userPanelName">User</div>
-                    <div class="user-panel-id" id="userPanelId">...</div>
-                </div>
-                <div class="text-gray-600">
-                    <i class="fas fa-cog"></i>
-                </div>
-            </div>
-          </div>
-
-          <!-- リサイズハンドル -->
-          <div id="resizer"></div>
-
-          <!-- チャットエリア -->
-          <div class="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
-            <div
-              id="currentRoomHeader"
-              class="bg-gray-200 p-3 border-b border-gray-300 text-center font-semibold text-gray-800 text-lg hidden flex-shrink-0 flex justify-between items-center"
-            >
-              <button id="mobileBackButton" class="text-gray-600 hover:text-gray-800 hidden items-center p-3 -ml-3 mr-1 rounded-full" style="display:none;"><i class="fas fa-arrow-left"></i></button>
-              <span id="currentRoomTitleText" class="flex-1"></span>
-              <button id="toggleSearchButton" class="text-gray-500 hover:text-gray-800 ml-2"><i class="fas fa-search"></i></button>
-            </div>
-            <div id="searchContainer" class="hidden flex-shrink-0 flex items-center">
-              <input type="text" id="searchInput" placeholder="メッセージを検索..." class="flex-1 p-2 text-sm rounded border border-gray-400 focus:outline-none">
-              <button id="closeSearchBtn" class="ml-2 text-gray-500 hover:text-gray-700 w-6 h-6"><i class="fas fa-times"></i></button>
-            </div>
-            <div id="pinnedMessagesArea" class="hidden flex-shrink-0"></div>
-            
-            <div
-              id="messagesDisplay"
-              class="flex-1 scrollable p-4 flex flex-col space-y-2"
-            >
-              <!-- メッセージはここに動的に追加されます -->
-            </div>
-            
-            <!-- メッセージ入力エリア -->
-            <div
-              id="messageInputArea"
-              class="p-4 flex flex-col items-center bg-white flex-shrink-0 relative"
-            >
-              <!-- ドラッグ＆ドロップオーバーレイ -->
-              <div id="dropOverlay">
-                <span class="text-gray-800 font-bold text-lg">ファイルをドロップして添付</span>
-              </div>
-              <!-- リプライUI -->
-              <div
-                id="replyingToContainer"
-                class="w-full p-2 mb-2 bg-gray-200 rounded-lg flex items-center justify-between hidden"
-              >
-                <div class="flex-1 overflow-hidden">
-                  <div class="text-xs text-gray-600">
-                    返信先: <span id="replyingToNickname"></span>
-                  </div>
-                  <div
-                    id="replyingToText"
-                    class="text-sm text-gray-800 truncate"
-                  ></div>
-                </div>
-                <button
-                  id="cancelReplyButton"
-                  class="ml-2 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white text-xs rounded-md"
-                >
-                  X
-                </button>
-              </div>
-              <!-- 添付ファイルのプレビューエリア -->
-              <div
-                id="filePreviewContainer"
-                class="w-full p-2 mb-2 bg-gray-200 rounded-lg flex items-center justify-between hidden"
-              >
-                <span
-                  id="filePreviewName"
-                  class="text-sm text-gray-800 truncate"
-                ></span>
-                <button
-                  id="clearFileButton"
-                  class="ml-2 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white text-xs rounded-md"
-                >
-                  X
-                </button>
-              </div>
-              <!-- メンションポップアップ -->
-              <div id="mentionPopup" class="hidden"></div>
-              <div class="w-full flex items-end gap-1">
-                <button id="fileAttachButton" class="input-action-btn" title="ファイルを添付"><i class="fas fa-paperclip"></i></button>
-                <button id="mentionButton" class="input-action-btn" title="メンション"><i class="fas fa-at"></i></button>
-                <input type="file" id="fileAttachInput" class="hidden" />
-                <textarea
-                  id="messageInput"
-                  placeholder="メッセージを入力"
-                  class="flex-1 p-3 rounded-lg w-full focus:outline-none"
-                  rows="1"
-                  disabled
-                ></textarea>
-              </div>
-            </div>
-          </div>
-
-          <!-- メンバーリストサイドバー (スマホではボトムシート) -->
-          <div id="bottomSheetOverlay"></div>
-          <div id="membersSidebar" class="hidden md:flex scrollable">
-            <div id="bottomSheetHandle"></div>
-            <div id="membersList" class="p-2 w-full">
-              <!-- メンバーはここに動的に追加されます -->
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- カスタムコンテキストメニュー -->
-    <div id="messageContextMenu" class="custom-context-menu hidden">
-      <button id="copyMessageButton">コピー</button>
-      <button id="pinMessageButton">ピン留め / 解除</button>
-      <button id="deleteMessageButton">削除</button>
-    </div>
-
-    <!-- Firebase SDKのインポート -->
-    <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
       import {
         getAuth,
@@ -1447,6 +54,7 @@
       let isAdmin = false;
       const isTauri = window.__TAURI__ !== undefined;
       
+      let currentServerId = null;
       let currentRoomId = null;
       let unsubscribeMessages = null;
       let unsubscribeUserStatus = null;
@@ -1466,9 +74,6 @@
       // 未読バッジ用
       let unreadCounts = {};
       let unreadListeners = {};
-
-      // アクティブな通知ウィンドウを管理する配列
-      let activeNotifications = [];
 
       let awayTimer = null;
       const AWAY_TIMEOUT = 5 * 60 * 1000;
@@ -1662,7 +267,7 @@
                 adminPanelContainer.classList.add("hidden");
               }
 
-              const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+              const userProfileRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/profiles/${userId}`, "nicknameDoc");
               const userProfileSnap = await getDoc(userProfileRef);
 
               if (userProfileSnap.exists() && userProfileSnap.data().nickname) {
@@ -2014,7 +619,7 @@
       resetAvatarButton.addEventListener("click", async () => {
         loadingOverlay.classList.remove("hidden");
         try {
-            const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+            const userProfileRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/profiles/${userId}`, "nicknameDoc");
             await updateDoc(userProfileRef, { avatarUrl: null });
             userAvatarUrl = null;
             pendingAvatarUrl = null;
@@ -2054,7 +659,7 @@
         }
         loadingOverlay.classList.remove("hidden");
         try {
-            const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+            const userProfileRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/profiles/${userId}`, "nicknameDoc");
             const updateData = { nickname: newName, createdAt: serverTimestamp() };
             if (pendingAvatarUrl) { updateData.avatarUrl = pendingAvatarUrl; }
             await setDoc(userProfileRef, updateData, {merge: true});
@@ -2100,7 +705,7 @@
         }
         loadingOverlay.classList.remove("hidden");
         try {
-          const userProfileRef = doc(db, `artifacts/${appId}/users/${userId}/profile`, "nicknameDoc");
+          const userProfileRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/profiles/${userId}`, "nicknameDoc");
           await setDoc(userProfileRef, { nickname: nickname, createdAt: serverTimestamp() });
           userNickname = nickname;
           
@@ -2200,7 +805,7 @@
       function sendOfflineBeacon() {
         if (!userId) return;
         const url = 'https://simplechat-api.astro-fray-server.workers.dev/api/setOffline';
-        const data = JSON.stringify({ userId, appId });
+        const data = JSON.stringify({ userId, appId, serverId: currentServerId });
         try {
           if (navigator.sendBeacon) {
             navigator.sendBeacon(url, new Blob([data], { type: 'application/json' }));
@@ -2218,7 +823,7 @@
       async function updateUserStatus(state) {
         if (!userId || !userNickname) return;
         
-        const statusRef = doc(db, `artifacts/${appId}/status`, userId);
+        const statusRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/status`, userId);
         try {
           let updateData = {
             state: state,
@@ -2241,7 +846,7 @@
       function subscribeToUserStatus() {
         if (unsubscribeUserStatus) unsubscribeUserStatus();
         
-        const statusQuery = query(collection(db, `artifacts/${appId}/status`));
+        const statusQuery = query(collection(db, `artifacts/${appId}/servers/${currentServerId}/status`));
         unsubscribeUserStatus = onSnapshot(statusQuery, (snapshot) => {
             cachedUsers = [];
             snapshot.forEach((doc) => {
@@ -2355,7 +960,7 @@
       // Room Features
       // =========================================================================
       async function loadRooms() {
-        const roomsQuery = query(collection(db, `artifacts/${appId}/public/data/rooms`));
+        const roomsQuery = query(collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms`));
         onSnapshot(roomsQuery, (snapshot) => {
           roomList.innerHTML = "";
           // 既存のリスナーを解除し、現在のルームIDを記録
@@ -2435,7 +1040,7 @@
 
       function setupUnreadListener(roomId) {
         const q = query(
-          collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/messages`),
+          collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${roomId}/messages`),
           orderBy("timestamp", "desc"),
           limit(1)
         );
@@ -2467,7 +1072,7 @@
           
           const oldScrollHeight = messagesDisplay.scrollHeight;
           // 最新のメッセージから limit 件取得するために desc を使用
-          const q = query(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), orderBy("timestamp", "desc"), limit(messageLimit));
+          const q = query(collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`), orderBy("timestamp", "desc"), limit(messageLimit));
           
           unsubscribeMessages = onSnapshot(q, (snapshot) => {
               snapshot.docChanges().forEach(change => {
@@ -2547,7 +1152,7 @@
         
         subscribeToMessages();
 
-        const rrRef = collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`);
+        const rrRef = collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/readReceipts`);
         readReceiptsUnsubscribe = onSnapshot(rrRef, (snap) => {
             roomReadReceipts = {};
             snap.forEach(d => roomReadReceipts[d.id] = d.data());
@@ -2584,11 +1189,11 @@
              if(pass) {
                  data.hasPassword = true;
                  data.joinedUsers = [userId]; // Creator is automatically joined
-                 roomRef = await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+                 roomRef = await addDoc(collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms`), data);
                  // 秘密のサブコレクションにパスワードを保存
-                 await setDoc(doc(db, `artifacts/${appId}/public/data/rooms/${roomRef.id}/secrets`, "password"), { password: pass });
+                 await setDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${roomRef.id}/secrets`, "password"), { password: pass });
              } else {
-                 roomRef = await addDoc(collection(db, `artifacts/${appId}/public/data/rooms`), data);
+                 roomRef = await addDoc(collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms`), data);
              }
              alertMessage("ルームを作成しました", "success");
          } catch(e) { console.error(e); }
@@ -2615,7 +1220,7 @@
           joinRoomPasswordMessage.textContent = "確認中...";
           try {
               // サーバーにパスワード確認を依頼
-              const response = await fetch("https://simplechat-api.astro-fray-server.workers.dev/api/joinRoom", {
+              const response = await fetch("https://simplechat-api.astro-fray-server.workers.dev/api/joinServer", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
@@ -2667,21 +1272,21 @@
           const batch = writeBatch(db);
 
           // 1. messages サブコレクションの全削除
-          const messagesRef = collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/messages`);
+          const messagesRef = collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${roomId}/messages`);
           const messagesSnap = await getDocs(messagesRef);
           messagesSnap.forEach((docSnap) => {
             batch.delete(docSnap.ref);
           });
 
           // 2. readReceipts サブコレクションの全削除
-          const readReceiptsRef = collection(db, `artifacts/${appId}/public/data/rooms/${roomId}/readReceipts`);
+          const readReceiptsRef = collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${roomId}/readReceipts`);
           const readReceiptsSnap = await getDocs(readReceiptsRef);
           readReceiptsSnap.forEach((docSnap) => {
             batch.delete(docSnap.ref);
           });
 
           // 3. ルーム本体の削除
-          const roomRef = doc(db, `artifacts/${appId}/public/data/rooms`, roomId);
+          const roomRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms`, roomId);
           batch.delete(roomRef);
 
           await batch.commit();
@@ -2718,11 +1323,11 @@
               if(replyingToMessage) {
                   data.replyTo = { messageId: replyingToMessage.id, senderNickname: replyingToMessage.senderNickname, text: replyingToMessage.text || "（ファイル）" };
               }
-              await addDoc(collection(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`), data);
+              await addDoc(collection(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`), data);
 
               // 通知を送信
               try {
-                  const roomDoc = await getDoc(doc(db, `artifacts/${appId}/public/data/rooms`, currentRoomId));
+                  const roomDoc = await getDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms`, currentRoomId));
                   let receiverIds = [];
                   if (roomDoc.exists()) {
                       const roomData = roomDoc.data();
@@ -3022,7 +1627,7 @@
         if (document.visibilityState === 'hidden' || !document.hasFocus()) return;
         try {
           const lastMsgId = lastMessagesData.length ? lastMessagesData[lastMessagesData.length - 1].id : null;
-          const myReceiptRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`, userId);
+          const myReceiptRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/readReceipts`, userId);
           await setDoc(myReceiptRef, { lastReadAt: serverTimestamp(), lastReadMessageId: lastMsgId }, { merge: true });
         } catch (error) {}
       }
@@ -3096,7 +1701,7 @@
       });
       deleteMessageButton.addEventListener("click", async () => {
           if(selectedMessageForContext && (selectedMessageForContext.senderId === userId || isAdmin)) {
-              await deleteDoc(doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`, selectedMessageForContext.id));
+              await deleteDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`, selectedMessageForContext.id));
               alertMessage("削除しました", "success");
           } else {
               alertMessage("権限がありません", "warning");
@@ -3270,7 +1875,7 @@
       // --- ピン留め機能 ---
       pinMessageButton.addEventListener("click", async () => {
           if(selectedMessageForContext) {
-              const msgRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/messages`, selectedMessageForContext.id);
+              const msgRef = doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`, selectedMessageForContext.id);
               const isPinned = !selectedMessageForContext.isPinned;
               await updateDoc(msgRef, { isPinned: isPinned }, { merge: true });
               alertMessage(isPinned ? "ピン留めしました" : "ピン留めを解除しました", "success");
@@ -3447,101 +2052,35 @@
         // 設定チェック
         const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
         const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
-        const browserNotifEnabled = localStorage.getItem('browserNotificationEnabled') !== 'false';
+        
+        if (!desktopEnabled) return;
+
+        if (soundEnabled) {
+          playNotificationSound();
+        }
 
         if (isTauri) {
-          if (!desktopEnabled) return;
-          if (soundEnabled) playNotificationSound();
-          showCustomNotification(title, body, roomId);
-        } else {
-          // ブラウザ版の設定で通知がオフなら何もしない
-          if (!browserNotifEnabled) return;
-          
-          // 【重要】画面がすでにフォーカスされている（開いている）場合は
-          // Service Worker側で通知が出ないようにする、あるいはフォアグラウンドでは独自UIのみ出す
-          if (document.hasFocus()) {
-            if (soundEnabled) playNotificationSound();
-            // 画面を見ているので、OS標準通知は出さず、アプリ内のスナックバー等だけにする
-            console.log("Foreground message received:", { title, body });
-            alertMessage(`${title}: ${body}`, "info");
-          } else {
-            // バックグラウンド時は Service Worker (firebase-messaging-sw.js) に任せるため
-            // ここでは new Notification() を実行しない（これが2件出る原因）
-            console.log("Background message received, letting SW handle it.");
-          }
-        }
-      }
-
-      async function showCustomNotification(title, body, roomId) {
-        if (!isTauri) return;
-        const notificationId = `notify-${Date.now()}`;
-        const width = 300;
-        const height = 80;
-        const margin = 10;
-        
-        // 既存の通知を上にスライドさせる
-        for (let i = 0; i < activeNotifications.length; i++) {
-          const win = activeNotifications[i];
-          try {
-            const pos = await win.outerPosition();
-            const newY = window.screen.availHeight - ((activeNotifications.length - i + 1) * (height + margin));
-            await win.setPosition({ x: pos.x, y: newY });
-          } catch(e) {
-            console.error("Failed to move notification", e);
-          }
-        }
-
-        // 新しい通知ウィンドウを作成（最前面表示）
-        const webview = new window.__TAURI__.webviewWindow.WebviewWindow(notificationId, {
-          url: `/notification.html?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&roomId=${encodeURIComponent(roomId || "")}`,
-          alwaysOnTop: true,
-          decorations: false,
-          transparent: true,
-          width: width,
-          height: height,
-          x: window.screen.availWidth - width - margin,
-          y: window.screen.availHeight - height - margin,
-          focus: false
-        });
-
-        activeNotifications.push(webview);
-
-        // 一定時間後に通知を消し、配列から削除する処理
-        setTimeout(() => {
-          webview.close();
-          activeNotifications = activeNotifications.filter(w => w.label !== notificationId);
-        }, 5000);
-      }
-
-      async function setupShortcuts() {
-        if (!isTauri || !window.__TAURI__?.globalShortcut) return;
-        const { register } = window.__TAURI__.globalShortcut;
-        
-        try {
-          // ショートカット1: アプリを起動（最前面へ）してメッセージ入力欄にフォーカス
-          await register('CommandOrControl+Shift+Space', async () => {
-            const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-            await win.show();
-            await win.setFocus();
-            await win.unminimize();
-            
-            const messageInput = document.getElementById('messageInput');
-            if (messageInput) {
-              messageInput.focus();
+          if (window.__TAURI__?.core?.invoke) {
+            try {
+              await window.__TAURI__.core.invoke('show_notification_window', {
+                title: title,
+                body: body,
+                roomId: roomId || ""
+              });
+            } catch(e) {
+              console.error("Failed to show notification window", e);
             }
-          });
-
-          // ショートカット2: 設定画面を開く
-          await register('CommandOrControl+Shift+S', async () => {
-            const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-            await win.show();
-            await win.setFocus();
-            await win.unminimize();
-            // 設定画面を開くために userPanel をクリック
-            userPanel.click(); 
-          });
-        } catch (e) {
-          console.error("Shortcut registration failed", e);
+          }
+        } else if ('Notification' in window) {
+          // Web/PWA版: ブラウザ標準通知
+          if (Notification.permission === 'granted') {
+            new Notification(title, { body: body, icon: '/icon-192x192.png', tag: roomId || 'simplechat' });
+          } else if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              new Notification(title, { body: body, icon: '/icon-192x192.png', tag: roomId || 'simplechat' });
+            }
+          }
         }
       }
 
@@ -3698,22 +2237,6 @@
         });
       }
 
-      function initBrowserSettings() {
-        const container = document.getElementById('browserSettingsContainer');
-        if (isTauri) {
-          if (container) container.classList.add('hidden');
-          return;
-        }
-        
-        const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
-        if (toggleBrowserNotif) {
-          toggleBrowserNotif.checked = localStorage.getItem('browserNotificationEnabled') !== 'false';
-          toggleBrowserNotif.addEventListener('change', (e) => {
-            localStorage.setItem('browserNotificationEnabled', e.target.checked);
-          });
-        }
-      }
-
       // =========================================================================
       // Application Startup
       // =========================================================================
@@ -3721,8 +2244,6 @@
           loadingOverlay.classList.remove('hidden');
           
           initSettings();
-          initBrowserSettings();
-          setupShortcuts();
 
           // Tauri 通知からのルーム遷移イベントリッスン
           if (isTauri && window.__TAURI__?.event?.listen) {
@@ -3753,6 +2274,4 @@
           if ('Notification' in window) Notification.requestPermission();
           initializeResizer();
       };
-    </script>
-  </body>
-</html>
+    

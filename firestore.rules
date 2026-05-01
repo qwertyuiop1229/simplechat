@@ -9,117 +9,167 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // 管理者リストに含まれているか（FirestoreのadminListドキュメントを参照）
-    function isAdmin(appId) {
+    // アプリ全体の管理者（Global Admin）かどうか
+    function isGlobalAdmin(appId) {
       return isAuthenticated() && 
         (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/adminList).data.emails);
     }
 
-    // 許可リストに含まれているか（正規に招待されたユーザーか）
-    function isAllowedUser(appId) {
-      return isAuthenticated() && 
-        (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/allowedEmails).data.emails);
+    // サーバーの管理者（Server Admin）かどうか
+    function isServerAdmin(appId, serverId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/servers/$(serverId)).data.serverAdmins
+        || isGlobalAdmin(appId)
+      );
+    }
+
+    // サーバーに参加しているか、または管理者かどうか
+    function isJoinedServer(appId, serverId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/servers/$(serverId)).data.joinedUsers
+        || isGlobalAdmin(appId)
+      );
     }
 
     // --- 各コレクションのルール ---
 
     match /artifacts/{appId} {
       
-      // 1. 管理者リスト設定
-      match /settings/adminList {
-        allow read: if isAllowedUser(appId);
-        allow write: if isAdmin(appId);
+      // 1. 全体設定（Global Adminのリストなど）
+      match /settings/{docId} {
+        // 誰でも（ワーカー等）読める必要があれば設定。
+        allow read: if isAuthenticated();
+        allow write: if isGlobalAdmin(appId);
       }
 
-      // 新規: 許可リスト設定
-      match /settings/allowedEmails {
-        // 未ログイン状態のCloudflare Workers(特権アカウント)も読む必要があるため、
-        // Workers用アカウントの特定メアドの場合は直接許可するか、Workersアカウント自体を許可リストに入れる想定です。
-        // （Workers用アカウントのメアドも adminList や allowedEmails に入れておく必要があります）
-        allow read: if isAuthenticated(); 
-        allow write: if isAdmin(appId);
-      }
-
-      // 2. ユーザープロフィール（ニックネーム・アイコン、およびFCMトークン等）
+      // 2. 全体ユーザー情報（FCMトークンなど）
       match /users/{userId} {
-        allow read: if isAllowedUser(appId);
-        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+        // トークンの追加などのため本人は読み書き可能。
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && request.auth.uid == userId;
       }
       
-      match /users/{userId}/profile/nicknameDoc {
-        // 他の人のアイコンも表示するため、読み取りは許可リストユーザーのみ
-        allow read: if isAllowedUser(appId);
-        // 自分のプロフィールのみ、本人が更新可能
-        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+      // ============================================================
+      // 旧パス互換ルール（デプロイ済みフロントエンド用 - 移行完了後に削除）
+      // ============================================================
+      
+      // 旧: ユーザープロフィール (users/{userId}/profile/nicknameDoc)
+      match /users/{userId}/profile/{docId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && request.auth.uid == userId;
       }
 
-      // 3. オンラインステータス
+      // 旧: オンラインステータス
       match /status/{userId} {
-        allow read: if isAllowedUser(appId);
-        allow write: if isAllowedUser(appId) && request.auth.uid == userId;
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && request.auth.uid == userId;
       }
 
-      // 4. チャットルーム
+      // 旧: チャットルーム
       match /public/data/rooms/{roomId} {
-        // ルーム一覧は全員が取得できるようにするため、readは許可
-        allow read: if isAllowedUser(appId);
-        // ルーム作成時：createdByが自分自身のUIDであることを強制
-        allow create: if isAllowedUser(appId) && request.resource.data.createdBy == request.auth.uid;
-        // ルーム設定（名前やパスワード有無、参加者リスト）の更新は作成者かCloudflareWorker(Admin)のみ
-        // ただしクライアントからは基本変更させない（Worker経由のみなど）か、作成者のみとする
-        allow update: if isAllowedUser(appId) && resource.data.createdBy == request.auth.uid;
-        // ルームの削除は管理者のみ
-        allow delete: if isAdmin(appId);
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isAuthenticated() && (resource.data.createdBy == request.auth.uid || isGlobalAdmin(appId));
+        allow delete: if isGlobalAdmin(appId);
 
-        // 5. シークレット情報（パスワード本体）
         match /secrets/{docId} {
-          // Worker等の管理者アカウントのみ読み取り可能
-          allow read: if isAdmin(appId);
-          // 作成は許可
-          allow create: if isAllowedUser(appId);
-          allow update: if isAllowedUser(appId);
-          allow delete: if isAdmin(appId);
+          allow read: if isGlobalAdmin(appId);
+          allow create, update: if isAuthenticated();
+          allow delete: if isGlobalAdmin(appId);
         }
 
-        // 6. メッセージ
         match /messages/{messageId} {
-          // パスワードなしのルーム、または自分が参加済み（joinedUsersに含まれる）、または管理者のみ読み取り可能
-          allow read: if isAllowedUser(appId) && (
-            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
-            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
-            || isAdmin(appId)
-          );
-          
-          // メッセージ作成時：senderIdが自分自身のUIDであることを強制し、かつルームを読める権限があること
-          allow create: if isAllowedUser(appId) && request.resource.data.senderId == request.auth.uid && (
-            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
-            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
-            || isAdmin(appId)
-          );
-          
-          // 更新の制限：
-          allow update: if isAllowedUser(appId) && (
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+          allow update: if isAuthenticated() && (
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned']) 
             || resource.data.senderId == request.auth.uid 
-            || isAdmin(appId)
+            || isGlobalAdmin(appId)
           );
-          
-          // メッセージの削除は、送信者本人か管理者のみ
-          allow delete: if isAllowedUser(appId) && (resource.data.senderId == request.auth.uid || isAdmin(appId));
+          allow delete: if isAuthenticated() && (resource.data.senderId == request.auth.uid || isGlobalAdmin(appId));
         }
 
-        // 7. 既読情報
-        match /readReceipts/{userId} {
-          // 同じく参加者のみ読み取り可能
-          allow read: if isAllowedUser(appId) && (
-            get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.hasPassword != true
-            || request.auth.uid in get(/databases/$(database)/documents/artifacts/$(appId)/public/data/rooms/$(roomId)).data.joinedUsers
-            || isAdmin(appId)
+        match /readReceipts/{receiptUserId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && request.auth.uid == receiptUserId;
+          allow delete: if isGlobalAdmin(appId);
+        }
+      }
+      
+      // ============================================================
+      // 新パス（サーバーベース構造）
+      // ============================================================
+      
+      // 3. サーバー
+      match /servers/{serverId} {
+        // サーバー一覧の取得（IDを知っている人が名前を見るため）は認証済みなら許可
+        allow read: if isAuthenticated();
+        
+        // 誰でもサーバーを作成できる。ただし作成者はserverAdminsとjoinedUsersに自分を含めること。
+        allow create: if isAuthenticated() &&
+                      request.resource.data.createdBy == request.auth.uid &&
+                      request.auth.uid in request.resource.data.serverAdmins &&
+                      request.auth.uid in request.resource.data.joinedUsers;
+                      
+        // 更新はサーバー管理者またはCloudflare Worker(joinedUsersへの追加等)
+        // クライアントからの参加（joinedUsersの追加）はパスワードチェックがあるためWorker経由のみ許可するのが安全ですが、
+        // 今回のアーキテクチャでは Worker から commit API で直接更新するため、クライアントからの更新は Server Admin のみとします。
+        allow update: if isServerAdmin(appId, serverId);
+        
+        // 削除はGlobal Admin または Server Adminのみ
+        allow delete: if isGlobalAdmin(appId) || isServerAdmin(appId, serverId);
+
+        // 3-1. サーバーのシークレット情報（パスワード）
+        match /secrets/{docId} {
+          allow read: if isServerAdmin(appId, serverId) || isGlobalAdmin(appId); // Worker は ServiceAccount/AdminSDK でバイパス
+          allow create, update: if isServerAdmin(appId, serverId);
+          allow delete: if isServerAdmin(appId, serverId) || isGlobalAdmin(appId);
+        }
+
+        // 3-2. サーバー内のルーム
+        match /rooms/{roomId} {
+          allow read: if isJoinedServer(appId, serverId);
+          allow create: if isJoinedServer(appId, serverId);
+          // ルーム設定変更や削除は作成者かServer AdminかGlobal Admin
+          allow update: if isJoinedServer(appId, serverId) && (resource.data.createdBy == request.auth.uid || isServerAdmin(appId, serverId));
+          allow delete: if isServerAdmin(appId, serverId) || isGlobalAdmin(appId);
+        }
+
+        // 3-3. サーバー内のメッセージ
+        match /messages/{messageId} {
+          allow read: if isJoinedServer(appId, serverId);
+          allow create: if isJoinedServer(appId, serverId) && request.resource.data.senderId == request.auth.uid;
+          
+          allow update: if isJoinedServer(appId, serverId) && (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isPinned']) 
+            || resource.data.senderId == request.auth.uid 
+            || isServerAdmin(appId, serverId)
           );
-          // 自分の既読情報のみ本人が更新可能
-          allow write: if isAllowedUser(appId) && request.auth.uid == userId;
-          // ルーム削除時などに備え、管理者は削除可能
-          allow delete: if isAdmin(appId);
+          
+          // メッセージ削除は送信者本人かサーバー管理者
+          allow delete: if isJoinedServer(appId, serverId) && (resource.data.senderId == request.auth.uid || isServerAdmin(appId, serverId));
+        }
+
+        // 3-4. サーバーごとのユーザープロフィール（ニックネームやアイコン）
+        match /profiles/{userId} {
+          // 参加者は全員のプロフィールを読める
+          allow read: if isJoinedServer(appId, serverId);
+          // 自分のプロフィールのみ更新可能
+          allow write: if isJoinedServer(appId, serverId) && request.auth.uid == userId;
+        }
+
+        // 3-5. サーバーごとのオンラインステータス
+        match /status/{userId} {
+          allow read: if isJoinedServer(appId, serverId);
+          allow write: if isJoinedServer(appId, serverId) && request.auth.uid == userId;
+        }
+        
+        // 3-6. サーバー内のルームごとの既読管理 (unread counts)
+        // ユーザーがルームを最後に開いた時間を保存する
+        match /readReceipts/{userId} {
+          allow read: if isJoinedServer(appId, serverId);
+          allow write: if isJoinedServer(appId, serverId) && request.auth.uid == userId;
+          allow delete: if isServerAdmin(appId, serverId) || isGlobalAdmin(appId);
         }
       }
     }
