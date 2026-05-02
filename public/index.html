@@ -1350,6 +1350,7 @@
               <!-- メッセージはここに動的に追加されます -->
             </div>
             
+            <div id="typingIndicator" class="px-4 pb-1 text-xs text-gray-400 italic min-h-[1.25rem] hidden"></div>
             <!-- メッセージ入力エリア -->
             <div
               id="messageInputArea"
@@ -1517,6 +1518,12 @@
       let cachedUsers = [];
       let memberListRefreshInterval = null;
       let userAvatarUrl = null;
+      let lightboxCurrentFile = null;
+      let typingTimeout = null;
+      let isCurrentlyTyping = false;
+      let typingUnsubscribe = null;
+      let readReceiptDebounceTimer = null;
+      let _lastSentReadMessageId = null;
       let messageLimit = 20;
       let isScrollingUpLoad = false;
 
@@ -1753,7 +1760,11 @@
             userPanelId.textContent = `#${userId.substring(0, 4)}`;
             
             if (userAvatarUrl) {
-                userPanelAvatar.innerHTML = `<img src="${userAvatarUrl}" class="w-full h-full rounded-full object-cover">`;
+                userPanelAvatar.innerHTML = '';
+                const avatarImg = document.createElement('img');
+                avatarImg.src = userAvatarUrl;
+                avatarImg.className = 'w-full h-full rounded-full object-cover';
+                userPanelAvatar.appendChild(avatarImg);
             } else {
                 userPanelAvatar.innerHTML = userNickname.charAt(0).toUpperCase();
             }
@@ -1946,7 +1957,16 @@
           if(!confirm(`「${email}」を許可リストから削除しますか？`)) return;
           adminMessage.textContent = "削除中...";
           try {
-              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");      // ★ ショートカットから呼ばれるフォーカス関数
+              const ref = doc(db, `artifacts/${appId}/settings`, "allowedEmails");
+              await updateDoc(ref, { emails: arrayRemove(email) });
+              adminMessage.textContent = "削除しました。";
+          } catch(e) {
+              console.error(e);
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      }
+
+      // ★ ショートカットから呼ばれるフォーカス関数
       window.focusMessageInput = function() {
         if (currentRoomId) {
           messageInput.focus();
@@ -2581,6 +2601,10 @@
         }
         
         if(readReceiptsUnsubscribe) readReceiptsUnsubscribe();
+        if(typingUnsubscribe) { typingUnsubscribe(); typingUnsubscribe = null; }
+        clearTimeout(typingTimeout);
+        isCurrentlyTyping = false;
+        setTypingStatus(false);
 
         isInitialMessageLoad = true;
         isScrollingUpLoad = false;
@@ -2594,6 +2618,27 @@
             renderMessagesWithReadReceipts();
         });
         
+        const typingColRef = collection(db, "apps", appId, "rooms", currentRoomId, "typing");
+        typingUnsubscribe = onSnapshot(typingColRef, (snap) => {
+          const now = Date.now();
+          const others = snap.docs
+            .filter(d => d.id !== userId)
+            .filter(d => {
+              const t = d.data().t;
+              if (!t || !t.toDate) return true;
+              return (now - t.toDate().getTime()) < 10000;
+            })
+            .map(d => d.data().n)
+            .filter(Boolean);
+          const indicator = document.getElementById('typingIndicator');
+          if (others.length > 0) {
+            indicator.textContent = others.join(', ') + ' が入力中...';
+            indicator.classList.remove('hidden');
+          } else {
+            indicator.classList.add('hidden');
+          }
+        });
+
         membersSidebar.classList.remove("hidden");
       }
 
@@ -2748,6 +2793,9 @@
       async function sendMessage() {
           const text = messageInput.value.trim();
           if((!text && !attachedFile) || !currentRoomId) return;
+          clearTimeout(typingTimeout);
+          isCurrentlyTyping = false;
+          setTypingStatus(false);
           
           loadingOverlay.classList.remove("hidden");
           try {
@@ -2796,8 +2844,7 @@
               messageInput.value = ""; messageInput.style.height="auto";
               clearAttachedFile(); cancelReply();
               
-              // ★ メッセージ送信時にオンラインにし、タイマーをリセット
-              updateUserStatus('online');
+              // ★ メッセージ送信後にタイマーをリセット
               resetAwayTimer();
 
           } catch(e) { 
@@ -2807,12 +2854,35 @@
               loadingOverlay.classList.add("hidden");
           }
       }
+      const imageLightbox = document.getElementById('imageLightbox');
+      const lightboxImage = document.getElementById('lightboxImage');
+      function closeLightbox() {
+        imageLightbox.style.display = 'none';
+        lightboxImage.src = '';
+        lightboxCurrentFile = null;
+      }
+      imageLightbox.addEventListener('click', (e) => { if (e.target === imageLightbox) closeLightbox(); });
+      document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+      document.getElementById('lightboxDownload').addEventListener('click', () => {
+        if (lightboxCurrentFile) downloadFile(lightboxCurrentFile.data, lightboxCurrentFile.name, lightboxCurrentFile.type);
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && imageLightbox.style.display === 'flex') closeLightbox(); });
+
       messageInput.addEventListener("keydown", (e) => {
           if(e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
       });
       messageInput.addEventListener("input", () => {
           messageInput.style.height = "auto";
           messageInput.style.height = messageInput.scrollHeight + "px";
+          if (!isCurrentlyTyping) {
+            isCurrentlyTyping = true;
+            setTypingStatus(true);
+          }
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(() => {
+            isCurrentlyTyping = false;
+            setTypingStatus(false);
+          }, 3000);
       });
       
       messageInput.addEventListener("paste", (e) => {
@@ -2983,7 +3053,11 @@
               img.src = message.fileData;
               img.className = 'mt-2 rounded-lg max-w-full h-auto cursor-pointer object-contain';
               img.style.maxHeight = '250px';
-              img.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
+              img.addEventListener("click", () => {
+                lightboxCurrentFile = { data: message.fileData, name: message.fileName, type: message.fileType };
+                lightboxImage.src = message.fileData;
+                imageLightbox.style.display = 'flex';
+              });
               messageElement.appendChild(img);
           } else if (message.fileType && message.fileType.startsWith('video/')) {
               const video = document.createElement('video');
@@ -2996,7 +3070,13 @@
               const fileAttachmentDiv = document.createElement("div");
               fileAttachmentDiv.className = `mt-2 p-2 rounded-lg border border-gray-300 ${isMyMessage ? "bg-gray-200" : "bg-gray-100"} flex items-center space-x-2 cursor-pointer`;
               fileAttachmentDiv.style.color = "#333";
-              fileAttachmentDiv.innerHTML = `<span class="flex-1 text-sm font-semibold truncate">${message.fileName}</span><span>▼</span>`;
+              const fnSpan = document.createElement("span");
+              fnSpan.className = "flex-1 text-sm font-semibold truncate";
+              fnSpan.textContent = message.fileName;
+              const arrSpan = document.createElement("span");
+              arrSpan.textContent = "▼";
+              fileAttachmentDiv.appendChild(fnSpan);
+              fileAttachmentDiv.appendChild(arrSpan);
               fileAttachmentDiv.addEventListener("click", () => downloadFile(message.fileData, message.fileName, message.fileType));
               messageElement.appendChild(fileAttachmentDiv);
           }
@@ -3060,13 +3140,27 @@
         if (!currentRoomId || !userId) return;
         // バックグラウンド・最小化・非フォーカス時は既読にしない
         if (document.visibilityState === 'hidden' || !document.hasFocus()) return;
+        const lastMsgId = lastMessagesData.length ? lastMessagesData[lastMessagesData.length - 1].id : null;
+        if (lastMsgId === _lastSentReadMessageId) return;
+        _lastSentReadMessageId = lastMsgId;
         try {
-          const lastMsgId = lastMessagesData.length ? lastMessagesData[lastMessagesData.length - 1].id : null;
           const myReceiptRef = doc(db, `artifacts/${appId}/public/data/rooms/${currentRoomId}/readReceipts`, userId);
           await setDoc(myReceiptRef, { lastReadAt: serverTimestamp(), lastReadMessageId: lastMsgId }, { merge: true });
         } catch (error) {}
       }
       
+      async function setTypingStatus(isTyping) {
+        if (!currentRoomId || !userId || !appId) return;
+        const typingRef = doc(db, "apps", appId, "rooms", currentRoomId, "typing", userId);
+        try {
+          if (isTyping) {
+            await setDoc(typingRef, { n: userNickname, t: serverTimestamp() });
+          } else {
+            await deleteDoc(typingRef);
+          }
+        } catch(e) {}
+      }
+
       document.addEventListener("visibilitychange", () => { if (!document.hidden && document.hasFocus()) updateReadReceiptForCurrentUser(); });
       window.addEventListener("focus", () => { if (!document.hidden) updateReadReceiptForCurrentUser(); });
 
@@ -3325,7 +3419,14 @@
               pinnedMessages.forEach(msg => {
                   const div = document.createElement("div");
                   div.className = "pinned-message-item truncate";
-                  div.innerHTML = `<span class="font-bold mr-2 text-gray-800">${msg.senderNickname}:</span><span class="text-gray-600">${msg.text || (msg.fileType?.startsWith('image') ? "画像" : "ファイル")}</span>`;
+                  const pNameSpan = document.createElement("span");
+                  pNameSpan.className = "font-bold mr-2 text-gray-800";
+                  pNameSpan.textContent = msg.senderNickname + ":";
+                  const pTextSpan = document.createElement("span");
+                  pTextSpan.className = "text-gray-600";
+                  pTextSpan.textContent = msg.text || (msg.fileType?.startsWith('image') ? "画像" : "ファイル");
+                  div.appendChild(pNameSpan);
+                  div.appendChild(pTextSpan);
                   div.addEventListener("click", () => {
                       const el = messagesDisplay.querySelector(`.message-bubble[data-message-id="${msg.id}"]`);
                       if(el) {
@@ -3767,5 +3868,18 @@
           initializeResizer();
       };
     </script>
+  <div id="imageLightbox" class="fixed inset-0 z-[9999] items-center justify-center bg-black/80" style="display:none">
+    <div class="relative flex flex-col items-center p-4" onclick="event.stopPropagation()">
+      <img id="lightboxImage" src="" alt="" class="max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl">
+      <div class="flex gap-3 mt-4">
+        <button id="lightboxDownload" class="px-4 py-2 bg-white text-gray-800 rounded-lg font-semibold text-sm shadow hover:bg-gray-100 flex items-center gap-2">
+          <i class="fas fa-download"></i> ダウンロード
+        </button>
+        <button id="lightboxClose" class="px-4 py-2 bg-white/20 text-white rounded-lg font-semibold text-sm hover:bg-white/30">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
   </body>
 </html>
