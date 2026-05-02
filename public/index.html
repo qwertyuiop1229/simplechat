@@ -936,10 +936,11 @@
         <!-- 設定モーダル (マイページ / 設定) -->
         <div
           id="settingsModal"
-          class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden"
+          class="fixed inset-0 modal-overlay overflow-y-auto z-50 hidden"
         >
+          <div class="flex min-h-full items-center justify-center p-8">
           <div
-            class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative flex flex-col max-h-[90vh] my-8 overflow-hidden"
+            class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative flex flex-col"
           >
             <!-- 閉じるボタン -->
             <button id="closeSettingsButton" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10">
@@ -952,8 +953,8 @@
                 <button id="tabSettings" class="flex-1 py-4 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-all">設定</button>
             </div>
             
-            <!-- コンテンツエリア (スクロール可能) -->
-            <div class="flex-1 overflow-y-auto p-8 pt-6">
+            <!-- コンテンツエリア -->
+            <div class="p-8 pt-6">
                 
                 <!-- プロフィールタブ -->
                 <div id="profileSection">
@@ -1047,11 +1048,22 @@
                         <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">ショートカット</h3>
                         <div class="bg-blue-50 text-blue-700 p-4 rounded-xl text-sm leading-relaxed">
                             <div class="flex items-start gap-3">
-                                <i class="fas fa-keyboard mt-1"></i>
-                                <div>
-                                    <p class="font-bold mb-1">クイックアクセス</p>
-                                    <p class="text-xs opacity-80"><kbd class="bg-blue-100 px-1 rounded border border-blue-200">Ctrl</kbd> + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">Shift</kbd> + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">S</kbd></p>
-                                    <p class="text-xs mt-2">アプリを最前面に表示し、メッセージ入力欄にフォーカスします。</p>
+                                <i class="fas fa-keyboard mt-1 flex-shrink-0"></i>
+                                <div class="flex-1">
+                                    <p class="font-bold mb-2">クイックアクセス</p>
+                                    <p class="text-xs opacity-80 mb-3">
+                                        <kbd class="bg-blue-100 px-1 rounded border border-blue-200">Ctrl</kbd>
+                                        + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">Shift</kbd>
+                                        + <kbd id="shortcutKeyDisplay" class="bg-blue-200 px-1.5 rounded border border-blue-300 font-bold">S</kbd>
+                                    </p>
+                                    <p class="text-xs opacity-70 mb-3">アプリを最前面に表示し、メッセージ入力欄にフォーカスします。</p>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs opacity-70">キーを変更:</span>
+                                        <span class="text-xs opacity-70"><kbd class="bg-blue-100 px-1 rounded border border-blue-200">Ctrl</kbd> + <kbd class="bg-blue-100 px-1 rounded border border-blue-200">Shift</kbd> +</span>
+                                        <input type="text" id="shortcutKeyInput" maxlength="1"
+                                            class="w-10 text-center bg-white text-blue-800 font-bold text-sm rounded border border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-400 py-0.5 uppercase"
+                                            placeholder="S" />
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1077,11 +1089,13 @@
                 </button>
             </div>
           </div>
+          </div>
         </div>
 
         <!-- 管理者モーダル (Admin Panel) -->
-        <div id="adminModal" class="fixed inset-0 modal-overlay flex items-center justify-center z-50 hidden">
-          <div class="bg-white p-8 rounded-lg w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
+        <div id="adminModal" class="fixed inset-0 modal-overlay overflow-y-auto z-50 hidden">
+          <div class="flex min-h-full items-center justify-center p-8">
+          <div class="bg-white p-8 rounded-lg w-full max-w-lg relative">
             <button id="closeAdminModalButton" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
                 <i class="fas fa-times text-xl"></i>
             </button>
@@ -1109,6 +1123,7 @@
                 </div>
             </div>
             <div id="adminMessage" class="text-center text-sm font-bold mt-2"></div>
+          </div>
           </div>
         </div>
 
@@ -1303,9 +1318,9 @@
                     <div class="user-panel-name" id="userPanelName">User</div>
                     <div class="user-panel-id" id="userPanelId">...</div>
                 </div>
-                <div class="text-gray-600">
+                <button id="openSettingsBtn" class="text-gray-500 hover:text-gray-800 hover:bg-gray-200 p-1.5 rounded-lg transition-all" title="設定">
                     <i class="fas fa-cog"></i>
-                </div>
+                </button>
             </div>
           </div>
 
@@ -2006,9 +2021,9 @@
       // Settings Modal Logic
       const resetAvatarButton = document.getElementById("resetAvatarButton");
       
-      userPanel.addEventListener("click", () => {
+      function openSettingsModal(tab) {
         if(!userNickname) return;
-        switchSettingsTab("profile"); // 初期表示はプロフィール
+        switchSettingsTab(tab || "profile");
         settingsNicknameInput.value = userNickname;
         settingsAvatarText.textContent = userNickname.charAt(0).toUpperCase();
         pendingAvatarUrl = null;
@@ -2022,6 +2037,16 @@
         }
         settingsMessage.textContent = "";
         settingsModal.classList.remove("hidden");
+      }
+
+      userPanel.addEventListener("click", (e) => {
+        if (e.target.closest('#openSettingsBtn')) return;
+        openSettingsModal("profile");
+      });
+
+      document.getElementById("openSettingsBtn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSettingsModal("settings");
       });
 
       // アイコンリセットボタン
@@ -3368,193 +3393,14 @@
         }
       });
 
-      // =========================================================================
-      // FCM Initialization (全プラットフォーム対応)
-      // =========================================================================
-      async function initializeFCM() {
-        try {
-          if ('serviceWorker' in navigator) {
-            await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
-          }
-          if (!messaging) messaging = getMessaging(app);
-          if ('Notification' in window) {
-            const permission = await Notification.requestPermission();
-            if (permission === 'granted') {
-              try {
-                const swReg = await navigator.serviceWorker.ready;
-                const token = await getToken(messaging, { 
-                    vapidKey: "BCe5ICJmyyuurq1DsPBXY6AsQcSsIDuXPieZ-c4L1_5zcNwyq2HC3DBhMBND0g9oTwPmEzUhiLqsAjLrnmVlxj0",
-                    serviceWorkerRegistration: swReg
-                });
-                if (token && userId) {
-                  const userRef = doc(db, `artifacts/${appId}/users`, userId);
-                  await setDoc(userRef, { fcmTokens: arrayUnion(token) }, { merge: true });
-                }
-              } catch (tokenErr) { console.error('FCM Token error:', tokenErr); }
-            }
-          }
-          onMessage(messaging, (payload) => {
-            const title = payload.data?.title || payload.notification?.title || 'SimpleChat';
-            const body = payload.data?.body || payload.notification?.body || '新しいメッセージ';
-            const roomId = payload.data?.roomId || null;
-            showNotification(title, body, roomId);
-          });
-        } catch (error) { console.error('FCM Initialization Error:', error); }
-      }
-
-      // =========================================================================
-      // Sidebar Resizing Feature
-      // =========================================================================
-      function initializeResizer() {
-        const sidebar = document.getElementById("sidebar");
-        const resizer = document.getElementById("resizer");
-        const SIDEBAR_WIDTH_KEY = "chatAppSidebarWidth";
-        const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_KEY);
-        if (savedWidth) sidebar.style.width = savedWidth;
-
-        let isResizing = false;
-        resizer.addEventListener("mousedown", () => {
-          isResizing = true;
-          document.body.style.userSelect = "none";
-          document.addEventListener("mousemove", handleMouseMove);
-          document.addEventListener("mouseup", handleMouseUp);
-        });
-        function handleMouseMove(e) {
-          if (isResizing) {
-            const newWidth = Math.max(180, Math.min(600, e.clientX));
-            sidebar.style.width = `${newWidth}px`;
-          }
-        }
-        function handleMouseUp() {
-          isResizing = false;
-          document.body.style.userSelect = "";
-          document.removeEventListener("mousemove", handleMouseMove);
-          document.removeEventListener("mouseup", handleMouseUp);
-          localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebar.style.width);
-        }
-      }
-
-      // =========================================================================
-      // Notifications & Updater
-      // =========================================================================
-      let lastNotificationTime = 0;
-      let lastNotificationBody = "";
-      async function showNotification(title, body, roomId) {
-        const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
-        const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
-        const browserEnabled = localStorage.getItem('simplechat_browser_notif') !== 'false';
-        
-        if (!isTauri && !browserEnabled) return;
-        if (isTauri && !desktopEnabled) return;
-
-        const now = Date.now();
-        if (now - lastNotificationTime < 1000 && body === lastNotificationBody) return;
-        lastNotificationTime = now;
-        lastNotificationBody = body;
-
-        if (soundEnabled) playNotificationSound();
-
-        if (isTauri) {
-          if (window.__TAURI__?.core?.invoke) {
-            try {
-              await window.__TAURI__.core.invoke('show_notification_window', { title, body, roomId: roomId || "" });
-            } catch(e) { console.error(e); }
-          }
-        } else if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification(title, { body, icon: '/icon-192x192.png', tag: roomId || 'simplechat' });
-        }
-      }
-
-      let pendingUpdate = null;
-      async function blockingUpdateCheck() {
-        if (!isTauri) return false;
-        const updater = window.__TAURI__?.updater;
-        if (!updater) return false;
-        try {
-          const update = await updater.check();
-          if (update) {
-            pendingUpdate = update;
-            const overlay = document.getElementById('updateOverlay');
-            document.getElementById('updateVersionText').textContent = `v${update.version} が利用可能です`;
-            document.getElementById('updateBodyText').textContent = update.body || '更新があります。';
-            overlay.classList.add('show');
-            return true;
-          }
-        } catch (error) { console.error(error); }
-        return false;
-      }
-
-      window.performUpdate = async function() {
-        if (!pendingUpdate) return;
-        const btn = document.getElementById('updateButton');
-        const progress = document.getElementById('updateProgress');
-        const progressText = document.getElementById('updateProgressText');
-        btn.disabled = true;
-        progress.classList.add('show');
-        progressText.textContent = '更新中...';
-        try {
-          await pendingUpdate.downloadAndInstall();
-          window.location.reload();
-        } catch (error) {
-          progressText.textContent = '更新失敗';
-          btn.disabled = false;
-        }
-      };
-
-      // =========================================================================
-      // PWA & Settings Management
-      // =========================================================================
-      function initSettings() {
-        const toggleNotifSound = document.getElementById('toggleNotifSound');
-        const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
-        const toggleDesktopNotif = document.getElementById('toggleDesktopNotif');
-        const toggleAutoStart = document.getElementById('toggleAutoStart');
-        
-        toggleNotifSound.checked = localStorage.getItem('simplechat_sound') !== 'false';
-        toggleBrowserNotif.checked = localStorage.getItem('simplechat_browser_notif') !== 'false';
-        
-        if (isTauri) {
-          document.getElementById('desktopSettingsContainer').classList.remove('hidden');
-          toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
-          if (window.__TAURI__?.autostart) {
-            window.__TAURI__.autostart.isEnabled().then(enabled => toggleAutoStart.checked = enabled);
-          }
-        }
-        
-        toggleNotifSound.addEventListener('change', (e) => localStorage.setItem('simplechat_sound', e.target.checked));
-        toggleBrowserNotif.addEventListener('change', (e) => localStorage.setItem('simplechat_browser_notif', e.target.checked));
-        toggleDesktopNotif.addEventListener('change', (e) => localStorage.setItem('simplechat_desktop_notif', e.target.checked));
-        toggleAutoStart.addEventListener('change', async (e) => {
-          if (!window.__TAURI__?.autostart) return;
-          try {
-          ) {
-            e.preventDefault(); confirmDeletePasswordButton.click();
-          } else if(
-            !settingsModal.classList.contains("hidden") && document.activeElement === settingsNicknameInput
-          ) {
-            e.preventDefault(); saveSettingsButton.click();
-          }
-        }
-
-        if (e.key === "Shift") {
-          if (!createRoomPasswordModal.classList.contains("hidden")) {
-            cancelCreateRoomButton.click();
-          } else if (!joinRoomPasswordModal.classList.contains("hidden")) {
-            cancelJoinRoomButton.click();
-          } else if (!deleteRoomConfirmModal.classList.contains("hidden")) {
-            cancelDeleteButton.click();
-          } else if (!deleteRoomPasswordModal.classList.contains("hidden")) {
-            cancelDeletePasswordButton.click();
-          } else if (!settingsModal.classList.contains("hidden")) {
-            closeSettingsButton.click();
-          }
-        }
-      });
 
       // =========================================================================
       // FCM Initialization (全プラットフォーム対応)
       // =========================================================================
+      let fcmInitialized = false;
       async function initializeFCM() {
+        if (fcmInitialized) return;
+        fcmInitialized = true;
         try {
           // Service Worker を明示的に登録
           if ('serviceWorker' in navigator) {
@@ -3640,29 +3486,27 @@
       // Notifications & Updater
       // =========================================================================
 
-      // 重複通知防止用のID管理
+      // 重複通知防止 (同一内容を3秒以内に複数ソースから受け取った場合は1件のみ表示)
       let lastNotificationTime = 0;
       let lastNotificationBody = "";
+      let lastNotificationRoomId = "";
 
       // --- 統合通知関数 ---
       async function showNotification(title, body, roomId) {
-        // 設定チェック
         const soundEnabled = localStorage.getItem('simplechat_sound') !== 'false';
         const desktopEnabled = localStorage.getItem('simplechat_desktop_notif') !== 'false';
         const browserEnabled = localStorage.getItem('simplechat_browser_notif') !== 'false';
-        
-        // ブラウザ版で通知オフなら終了
+
         if (!isTauri && !browserEnabled) return;
-        // Tauri版でデスクトップ通知オフなら終了
         if (isTauri && !desktopEnabled) return;
 
-        // 重複チェック (1秒以内の同一内容は無視)
+        // 重複チェック: 3秒以内に同じ内容(body+roomId)が来たら無視
         const now = Date.now();
-        if (now - lastNotificationTime < 1000 && body === lastNotificationBody) {
-            return;
-        }
+        const sameContent = body === lastNotificationBody && (roomId || '') === lastNotificationRoomId;
+        if (now - lastNotificationTime < 3000 && sameContent) return;
         lastNotificationTime = now;
         lastNotificationBody = body;
+        lastNotificationRoomId = roomId || '';
 
         if (soundEnabled) {
           playNotificationSound();
@@ -3808,26 +3652,49 @@
         const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
         const toggleDesktopNotif = document.getElementById('toggleDesktopNotif');
         const toggleAutoStart = document.getElementById('toggleAutoStart');
-        
+
         // Load initial state
         toggleNotifSound.checked = localStorage.getItem('simplechat_sound') !== 'false';
         toggleBrowserNotif.checked = localStorage.getItem('simplechat_browser_notif') !== 'false';
-        
+
         if (isTauri) {
           document.getElementById('desktopSettingsContainer').classList.remove('hidden');
           document.getElementById('desktopNotifRow').classList.remove('hidden');
           document.getElementById('shortcutInfoContainer').classList.remove('hidden');
-          document.getElementById('browserNotifRow').classList.add('hidden'); // Tauriではブラウザ通知トグルを隠す
+          document.getElementById('browserNotifRow').classList.add('hidden');
 
           toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
-          
+
           if (window.__TAURI__?.autostart) {
             window.__TAURI__.autostart.isEnabled().then(enabled => {
               toggleAutoStart.checked = enabled;
             }).catch(console.error);
           }
+
+          // ショートカットキー入力欄の初期化
+          const shortcutInput = document.getElementById('shortcutKeyInput');
+          const shortcutDisplay = document.getElementById('shortcutKeyDisplay');
+          const savedKey = localStorage.getItem('simplechat_shortcut_key') || 'S';
+          shortcutInput.value = savedKey.toUpperCase();
+          shortcutDisplay.textContent = savedKey.toUpperCase();
+
+          shortcutInput.addEventListener('input', (e) => {
+            const val = e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase();
+            e.target.value = val;
+            if (val.length === 1) {
+              localStorage.setItem('simplechat_shortcut_key', val);
+              shortcutDisplay.textContent = val;
+              if (window.__TAURI__?.core?.invoke) {
+                window.__TAURI__.core.invoke('update_shortcut_key', { key: val }).catch(console.error);
+              }
+            }
+          });
+
+          shortcutInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') e.preventDefault();
+          });
         }
-        
+
         // Event Listeners
         toggleNotifSound.addEventListener('change', (e) => {
           localStorage.setItem('simplechat_sound', e.target.checked);
@@ -3836,11 +3703,11 @@
         toggleBrowserNotif.addEventListener('change', (e) => {
           localStorage.setItem('simplechat_browser_notif', e.target.checked);
         });
-        
+
         toggleDesktopNotif.addEventListener('change', (e) => {
           localStorage.setItem('simplechat_desktop_notif', e.target.checked);
         });
-        
+
         toggleAutoStart.addEventListener('change', async (e) => {
           if (!window.__TAURI__?.autostart) return;
           try {
@@ -3851,7 +3718,7 @@
             }
           } catch(err) {
             console.error("Autostart toggle failed", err);
-            e.target.checked = !e.target.checked; // revert UI on failure
+            e.target.checked = !e.target.checked;
           }
         });
       }
@@ -3863,6 +3730,12 @@
           loadingOverlay.classList.remove('hidden');
           
           initSettings();
+
+          // 保存済みショートカットキーを Tauri に適用
+          if (isTauri && window.__TAURI__?.core?.invoke) {
+            const savedKey = localStorage.getItem('simplechat_shortcut_key') || 'S';
+            window.__TAURI__.core.invoke('update_shortcut_key', { key: savedKey }).catch(console.error);
+          }
 
           // Tauri 通知からのルーム遷移イベントリッスン
           if (isTauri && window.__TAURI__?.event?.listen) {

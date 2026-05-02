@@ -1,36 +1,69 @@
-use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent};
+use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent, Emitter};
 use tauri::WebviewWindowBuilder;
 use std::sync::Mutex;
-use serde::{Serialize, Deserialize};
 
 #[derive(Default)]
 struct NotificationState {
     active_notifications: Mutex<Vec<String>>,
 }
 
+fn get_screen_rect(app_handle: &tauri::AppHandle) -> Option<(i32, i32, i32, i32)> {
+    if let Some(win) = app_handle.get_webview_window("main") {
+        if let Ok(Some(m)) = win.current_monitor() {
+            let s = m.size(); let p = m.position();
+            return Some((s.width as i32, s.height as i32, p.x, p.y));
+        }
+        if let Ok(Some(m)) = win.primary_monitor() {
+            let s = m.size(); let p = m.position();
+            return Some((s.width as i32, s.height as i32, p.x, p.y));
+        }
+    }
+    None
+}
+
+fn emit_notification_positions(
+    app_handle: &tauri::AppHandle,
+    active: &[String],
+    skip_label: Option<&str>,
+) {
+    let spacing = 110;
+    let base_y = 140;
+    let Some((sw, sh, sx, sy)) = get_screen_rect(app_handle) else { return };
+    let tx = sx + sw - 380;
+
+    for (i, label) in active.iter().rev().enumerate() {
+        if skip_label.map_or(false, |s| s == label) { continue; }
+        let ty = sy + sh - base_y - (i as i32 * spacing);
+        if let Some(win) = app_handle.get_webview_window(label) {
+            let _ = win.emit("move-to", serde_json::json!({ "x": tx, "y": ty }));
+        }
+    }
+}
+
 #[tauri::command]
 fn show_notification_window(
-    app_handle: tauri::AppHandle, 
+    app_handle: tauri::AppHandle,
     state: tauri::State<'_, NotificationState>,
-    title: String, 
-    body: String, 
-    room_id: String
+    title: String,
+    body: String,
+    room_id: String,
 ) {
     let id = uuid::Uuid::new_v4().to_string();
     let label = format!("notification_{}", id);
-
-    // クエリパラメータで通知内容を渡す
-    let url = format!("/notification.html?title={}&body={}&roomId={}&id={}", 
-        urlencoding::encode(&title), 
+    let url = format!(
+        "/notification.html?title={}&body={}&roomId={}&id={}",
+        urlencoding::encode(&title),
         urlencoding::encode(&body),
         urlencoding::encode(&room_id),
         urlencoding::encode(&id)
     );
 
+    let screen_rect = get_screen_rect(&app_handle);
+
     let notification_window = WebviewWindowBuilder::new(
         &app_handle,
         &label,
-        tauri::WebviewUrl::App(url.into())
+        tauri::WebviewUrl::App(url.into()),
     )
     .inner_size(360.0, 100.0)
     .always_on_top(true)
@@ -42,13 +75,21 @@ fn show_notification_window(
     .build()
     .unwrap();
 
-    // 通知をリストに追加
     {
         let mut active = state.active_notifications.lock().unwrap();
+        let new_index = active.len();
+
+        // 新しいウィンドウを表示前に正しい位置に配置
+        if let Some((sw, sh, sx, sy)) = screen_rect {
+            let tx = sx + sw - 380;
+            let ty = sy + sh - 140 - (new_index as i32 * 110);
+            let _ = notification_window.set_position(tauri::PhysicalPosition { x: tx, y: ty });
+        }
+
         active.push(label.clone());
-        
-        // 全通知の位置を更新
-        update_notification_positions(&app_handle, &active);
+
+        // 既存ウィンドウをアニメーション付きで上にスライド
+        emit_notification_positions(&app_handle, &active, Some(&label));
     }
 
     let _ = notification_window.show();
@@ -58,36 +99,41 @@ fn show_notification_window(
 fn close_notification(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, NotificationState>,
-    label: String
+    label: String,
 ) {
-    if let Some(window) = app_handle.get_webview_window(&label) {
-        let _ = window.close();
+    if let Some(win) = app_handle.get_webview_window(&label) {
+        let _ = win.close();
     }
-
     let mut active = state.active_notifications.lock().unwrap();
     if let Some(pos) = active.iter().position(|l| l == &label) {
         active.remove(pos);
-        update_notification_positions(&app_handle, &active);
+        emit_notification_positions(&app_handle, &active, None);
     }
 }
 
-fn update_notification_positions(app_handle: &tauri::AppHandle, active: &[String]) {
-    // 画面の右下に配置。新しいものが下、古いものが上。
-    // LINEのように、新しいものが一番下に来るようにする。
-    let spacing = 110; // ウィンドウの高さ + 余白
-    let base_y_offset = 140; // 一番下の通知のY位置（下端からの距離）
+fn char_to_code(key: &str) -> Option<tauri_plugin_global_shortcut::Code> {
+    use tauri_plugin_global_shortcut::Code;
+    match key.to_uppercase().as_str() {
+        "A" => Some(Code::KeyA), "B" => Some(Code::KeyB), "C" => Some(Code::KeyC),
+        "D" => Some(Code::KeyD), "E" => Some(Code::KeyE), "F" => Some(Code::KeyF),
+        "G" => Some(Code::KeyG), "H" => Some(Code::KeyH), "I" => Some(Code::KeyI),
+        "J" => Some(Code::KeyJ), "K" => Some(Code::KeyK), "L" => Some(Code::KeyL),
+        "M" => Some(Code::KeyM), "N" => Some(Code::KeyN), "O" => Some(Code::KeyO),
+        "P" => Some(Code::KeyP), "Q" => Some(Code::KeyQ), "R" => Some(Code::KeyR),
+        "S" => Some(Code::KeyS), "T" => Some(Code::KeyT), "U" => Some(Code::KeyU),
+        "V" => Some(Code::KeyV), "W" => Some(Code::KeyW), "X" => Some(Code::KeyX),
+        "Y" => Some(Code::KeyY), "Z" => Some(Code::KeyZ),
+        _ => None,
+    }
+}
 
-    for (i, label) in active.iter().rev().enumerate() {
-        if let Some(window) = app_handle.get_webview_window(label) {
-            if let Ok(Some(monitor)) = window.current_monitor() {
-                let size = monitor.size();
-                let position = tauri::PhysicalPosition {
-                    x: (size.width as i32) - 380, // 右端から20px
-                    y: (size.height as i32) - base_y_offset - (i as i32 * spacing),
-                };
-                let _ = window.set_position(position);
-            }
-        }
+#[tauri::command]
+fn update_shortcut_key(app_handle: tauri::AppHandle, key: String) {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Modifiers, Shortcut};
+    let _ = app_handle.global_shortcut().unregister_all();
+    if let Some(code) = char_to_code(&key) {
+        let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), code);
+        let _ = app_handle.global_shortcut().register(shortcut);
     }
 }
 
@@ -95,29 +141,34 @@ fn update_notification_positions(app_handle: &tauri::AppHandle, active: &[String
 pub fn run() {
   tauri::Builder::default()
     .manage(NotificationState::default())
-    .invoke_handler(tauri::generate_handler![show_notification_window, close_notification])
+    .invoke_handler(tauri::generate_handler![
+        show_notification_window,
+        close_notification,
+        update_shortcut_key,
+    ])
     .setup(|app| {
-      let handle = app.handle().clone();
-      
-      // グローバルショートカットの登録
-      // デフォルトは Ctrl+Shift+S (SimpleChatのS)
-      // ユーザー設定はフロントエンドで行うが、ここではバックエンドの登録を行う
-      use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+      let _handle = app.handle().clone();
+
+      use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState, ShortcutEvent};
 
       let ctrl_shift_s = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS);
-      
-      app.handle().plugin(
-        tauri_plugin_global_shortcut::Builder::with_handler(move |app, shortcut, event| {
-            if event.state() == ShortcutState::Pressed {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    let _ = window.eval("if(window.focusMessageInput) window.focusMessageInput()");
-                }
-            }
-        })
-        .build(),
-      )?;
+
+      let shortcut_plugin = {
+        let h = app.handle().clone();
+        tauri_plugin_global_shortcut::Builder::new()
+          .with_handler(move |_app, _sc, event: ShortcutEvent| {
+              if event.state() == ShortcutState::Pressed {
+                  if let Some(window) = h.get_webview_window("main") {
+                      let _ = window.show();
+                      let _ = window.unminimize();
+                      let _ = window.set_focus();
+                      let _ = window.eval("if(window.focusMessageInput) window.focusMessageInput()");
+                  }
+              }
+          })
+          .build()
+      };
+      app.handle().plugin(shortcut_plugin)?;
 
       let _ = app.global_shortcut().register(ctrl_shift_s);
 
@@ -129,9 +180,7 @@ pub fn run() {
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "quit" => {
-                app.exit(0);
-            }
+            "quit" => { app.exit(0); }
             "show" => {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
@@ -145,8 +194,7 @@ pub fn run() {
                 button: tauri::tray::MouseButton::Left,
                 button_state: tauri::tray::MouseButtonState::Up,
                 ..
-            } = event
-            {
+            } = event {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
@@ -160,7 +208,6 @@ pub fn run() {
     })
     .on_window_event(|window, event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
-            // メインウィンドウが閉じられようとしたら隠すだけに（トレイ常駐）
             if window.label() == "main" {
                 api.prevent_close();
                 let _ = window.hide();

@@ -119,14 +119,49 @@
     document.getElementById('notifBody').textContent = body;
 
     const { invoke } = window.__TAURI__.core;
-    const { emit } = window.__TAURI__.event;
+    const { emit, listen } = window.__TAURI__.event;
     const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
     const appWindow = getCurrentWebviewWindow();
+
+    // PhysicalPosition を取得（Tauri v2 DPI モジュールから、なければ互換オブジェクト）
+    function makePhysPos(x, y) {
+      const dpi = window.__TAURI__?.dpi;
+      if (dpi?.PhysicalPosition) return new dpi.PhysicalPosition(x, y);
+      return { type: 'Physical', x, y };
+    }
+
+    // 既存通知を上にスライドさせるアニメーション（Rustからのmove-toイベントで呼ばれる）
+    let animating = false;
+    async function animateTo(tx, ty) {
+      if (animating) return;
+      animating = true;
+      try {
+        const pos = await appWindow.position();
+        const sx = pos.x, sy = pos.y;
+        if (Math.abs(sx - tx) < 2 && Math.abs(sy - ty) < 2) { animating = false; return; }
+        const dur = 280;
+        const t0 = performance.now();
+        function step(now) {
+          const t = Math.min((now - t0) / dur, 1);
+          const ease = 1 - Math.pow(1 - t, 3);
+          appWindow.setPosition(makePhysPos(
+            Math.round(sx + (tx - sx) * ease),
+            Math.round(sy + (ty - sy) * ease)
+          )).catch(() => {});
+          if (t < 1) { requestAnimationFrame(step); }
+          else { animating = false; }
+        }
+        requestAnimationFrame(step);
+      } catch(e) { animating = false; }
+    }
+
+    listen('move-to', (event) => {
+      animateTo(event.payload.x, event.payload.y);
+    }).catch(console.error);
 
     async function dismissAndClose() {
       document.getElementById('notifBox').classList.add('dismissing');
       setTimeout(async () => {
-        // Backend command to handle position updates of remaining windows
         await invoke('close_notification', { label: appWindow.label });
       }, 350);
     }
@@ -138,13 +173,11 @@
 
     document.getElementById('notifBox').addEventListener('click', () => {
       if (roomId) {
-        // Emit event to main window
         emit('open-room', { roomId: roomId });
       }
       dismissAndClose();
     });
 
-    // Auto close after 5 seconds
     setTimeout(dismissAndClose, 5000);
   </script>
 </body>
