@@ -3814,18 +3814,26 @@
           if (metadata) {
             console.log('Update available:', metadata.version);
 
-            // Channel for progress events (required by plugin:updater|download_and_install)
+            // Tauri v2 plugin-updater は download → install の2段階。
+            // resource ID (rid) を全コマンドに渡す必要がある。
             const Channel = window.__TAURI__?.core?.Channel;
+            const rid = metadata.rid;
             pendingUpdate = {
+              rid: rid,
               version: metadata.version,
               body: metadata.body,
               downloadAndInstall: async () => {
+                console.log('[Updater] Starting download, rid:', rid);
+                const downloadArgs = { rid: rid };
                 if (Channel) {
                   const channel = new Channel();
-                  await invoke('plugin:updater|download_and_install', { onEvent: channel });
-                } else {
-                  await invoke('plugin:updater|download_and_install');
+                  channel.onmessage = (msg) => console.log('[Updater] event:', msg);
+                  downloadArgs.onEvent = channel;
                 }
+                await invoke('plugin:updater|download', downloadArgs);
+                console.log('[Updater] Download complete, installing...');
+                await invoke('plugin:updater|install', { rid: rid });
+                console.log('[Updater] Install complete');
               }
             };
 
@@ -3871,7 +3879,8 @@
           }, 2000);
         } catch (error) {
           console.error('Update failed:', error);
-          progressText.textContent = 'アップデートに失敗しました。後でもう一度お試しください。';
+          const detail = error instanceof Error ? error.message : (typeof error === 'object' ? JSON.stringify(error) : String(error));
+          progressText.textContent = 'アップデート失敗: ' + detail.substring(0, 200);
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-download"></i>&nbsp;&nbsp;もう一度試す';
         }
