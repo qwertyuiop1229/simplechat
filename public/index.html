@@ -802,6 +802,44 @@
         transform: translateX(20px);
       }
 
+      /* === 通知位置ピッカー === */
+      .monitor-rect {
+        position: absolute;
+        background: #1f2937;
+        border: 2px solid #4b5563;
+        border-radius: 6px;
+        cursor: default;
+        box-sizing: border-box;
+      }
+      .monitor-rect.is-primary { border-color: #3b82f6; }
+      .monitor-rect-label {
+        position: absolute;
+        top: 4px; left: 6px;
+        font-size: 10px;
+        color: #9ca3af;
+        font-weight: 700;
+        pointer-events: none;
+      }
+      .position-dot {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background: rgba(255,255,255,0.35);
+        border-radius: 50%;
+        cursor: pointer;
+        transform: translate(-50%, -50%);
+        transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+      }
+      .position-dot:hover {
+        background: rgba(255,255,255,0.7);
+        transform: translate(-50%,-50%) scale(1.25);
+      }
+      .position-dot.selected {
+        background: #3b82f6;
+        transform: translate(-50%,-50%) scale(1.4);
+        box-shadow: 0 0 8px rgba(59,130,246,0.6);
+      }
+
       /* === PWAインストールバナー === */
       #pwaInstallBanner {
         display: none;
@@ -981,7 +1019,7 @@
             </button>
 
             <!-- モーダルヘッダー -->
-            <div class="h-12 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-800 flex-shrink-0 flex items-center px-6">
+            <div class="h-12 bg-gray-800 flex-shrink-0 flex items-center px-6">
                 <span class="text-white/80 text-sm font-bold tracking-wide">プロフィール・設定</span>
             </div>
 
@@ -1078,6 +1116,18 @@
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- 通知位置 (Windows版のみ表示) -->
+                    <div id="notifPositionContainer" class="hidden">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">通知の位置</h3>
+                        <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
+                            <p class="text-xs text-gray-600">ディスプレイ上の位置をクリックして選択</p>
+                            <div id="monitorPicker" class="flex justify-center"></div>
+                            <button id="testNotifBtn" class="w-full mt-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-bold text-gray-700 transition-colors">
+                                <i class="fas fa-bell mr-1"></i> テスト通知を表示
+                            </button>
                         </div>
                     </div>
 
@@ -1530,6 +1580,12 @@
       let messaging;
       let currentFcmToken = null;
       const roomNames = {};
+      let availableMonitors = [];
+      let notifMonitorIndex = (() => {
+        const v = localStorage.getItem('simplechat_notif_monitor');
+        return v === null ? null : parseInt(v, 10);
+      })();
+      let notifPosition = localStorage.getItem('simplechat_notif_position') || 'bottom-right';
       let userId = null;
       let userNickname = null;
       let isAdmin = false;
@@ -3718,10 +3774,13 @@
               await window.__TAURI__.core.invoke('show_notification_window', {
                 title: title,
                 body: body,
-                roomId: roomId || ""
+                roomId: roomId || "",
+                monitorIndex: notifMonitorIndex,
+                position: notifPosition
               });
             } catch(e) {
               console.error("Failed to show notification window", e);
+              alert("通知ウィンドウの表示に失敗しました:\n" + (e?.message || e));
             }
           }
         } else if ('Notification' in window) {
@@ -3879,6 +3938,11 @@
           document.getElementById('desktopNotifRow').classList.remove('hidden');
           document.getElementById('shortcutInfoContainer').classList.remove('hidden');
           document.getElementById('browserNotifRow').classList.add('hidden');
+          document.getElementById('notifPositionContainer').classList.remove('hidden');
+          loadAndRenderMonitorPicker();
+          document.getElementById('testNotifBtn').addEventListener('click', () => {
+            showNotification('テスト通知', 'これはテストメッセージです', '');
+          });
 
           toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
 
@@ -3939,6 +4003,85 @@
             e.target.checked = !e.target.checked;
           }
         });
+      }
+
+
+      // === 通知位置ピッカー ===
+      async function loadAndRenderMonitorPicker() {
+        if (!isTauri || !window.__TAURI__?.core?.invoke) return;
+        try {
+          availableMonitors = await window.__TAURI__.core.invoke('get_available_monitors');
+        } catch(e) {
+          console.error('Failed to get monitors:', e);
+          return;
+        }
+        if (!availableMonitors.length) return;
+
+        // 全モニターのバウンディングボックスを計算してスケール決定
+        const minX = Math.min(...availableMonitors.map(m => m.x));
+        const minY = Math.min(...availableMonitors.map(m => m.y));
+        const maxX = Math.max(...availableMonitors.map(m => m.x + m.width));
+        const maxY = Math.max(...availableMonitors.map(m => m.y + m.height));
+        const totalW = maxX - minX, totalH = maxY - minY;
+        const targetW = 280;
+        const targetH = 160;
+        const scale = Math.min(targetW / totalW, targetH / totalH);
+
+        const picker = document.getElementById('monitorPicker');
+        picker.innerHTML = '';
+
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.width = (totalW * scale) + 'px';
+        wrapper.style.height = (totalH * scale) + 'px';
+
+        // 初期選択モニターを決定（保存値が範囲外/未設定なら primary）
+        if (notifMonitorIndex === null || notifMonitorIndex >= availableMonitors.length) {
+          const primary = availableMonitors.findIndex(m => m.is_primary);
+          notifMonitorIndex = primary >= 0 ? primary : 0;
+        }
+
+        availableMonitors.forEach((mon, idx) => {
+          const rect = document.createElement('div');
+          rect.className = 'monitor-rect' + (mon.is_primary ? ' is-primary' : '');
+          rect.style.left = ((mon.x - minX) * scale) + 'px';
+          rect.style.top = ((mon.y - minY) * scale) + 'px';
+          rect.style.width = (mon.width * scale) + 'px';
+          rect.style.height = (mon.height * scale) + 'px';
+
+          const label = document.createElement('div');
+          label.className = 'monitor-rect-label';
+          label.textContent = (idx + 1) + (mon.is_primary ? ' (主)' : '');
+          rect.appendChild(label);
+
+          const positions = [
+            ['top-left', 12, 18], ['top-center', 50, 18], ['top-right', 88, 18],
+            ['middle-left', 12, 50], ['middle-center', 50, 50], ['middle-right', 88, 50],
+            ['bottom-left', 12, 82], ['bottom-center', 50, 82], ['bottom-right', 88, 82],
+          ];
+          positions.forEach(([key, xp, yp]) => {
+            const dot = document.createElement('div');
+            dot.className = 'position-dot';
+            dot.style.left = xp + '%';
+            dot.style.top = yp + '%';
+            if (idx === notifMonitorIndex && key === notifPosition) {
+              dot.classList.add('selected');
+            }
+            dot.title = key;
+            dot.addEventListener('click', (e) => {
+              e.stopPropagation();
+              notifMonitorIndex = idx;
+              notifPosition = key;
+              localStorage.setItem('simplechat_notif_monitor', String(idx));
+              localStorage.setItem('simplechat_notif_position', key);
+              wrapper.querySelectorAll('.position-dot.selected').forEach(d => d.classList.remove('selected'));
+              dot.classList.add('selected');
+            });
+            rect.appendChild(dot);
+          });
+          wrapper.appendChild(rect);
+        });
+        picker.appendChild(wrapper);
       }
 
       // =========================================================================

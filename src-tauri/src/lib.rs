@@ -5,39 +5,134 @@ use std::sync::Mutex;
 #[derive(Default)]
 struct NotificationState {
     active_notifications: Mutex<Vec<String>>,
+    // 最後に使った位置情報。close 時の再配置にも使う。
+    last_position: Mutex<Option<(Option<usize>, String)>>, // (monitor_index, position_key)
 }
 
-fn get_screen_rect(app_handle: &tauri::AppHandle) -> Option<(i32, i32, i32, i32)> {
-    if let Some(win) = app_handle.get_webview_window("main") {
-        if let Ok(Some(m)) = win.current_monitor() {
-            let s = m.size(); let p = m.position();
-            return Some((s.width as i32, s.height as i32, p.x, p.y));
+#[derive(serde::Serialize)]
+struct MonitorInfo {
+    index: usize,
+    name: String,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    is_primary: bool,
+    scale_factor: f64,
+}
+
+const NOTIF_W: i32 = 360;
+const NOTIF_H: i32 = 100;
+const STACK_SPACING: i32 = 110;
+const SCREEN_MARGIN: i32 = 20;
+
+// monitor_index が指定されていればそのインデックスのモニターを、
+// そうでなければ current_monitor → primary_monitor の順で返す。
+// 戻り値: (monitor_x, monitor_y, monitor_w, monitor_h)
+fn get_monitor_rect(
+    app_handle: &tauri::AppHandle,
+    monitor_index: Option<usize>,
+) -> Option<(i32, i32, i32, i32)> {
+    let win = app_handle.get_webview_window("main")?;
+    if let Some(idx) = monitor_index {
+        if let Ok(monitors) = win.available_monitors() {
+            if let Some(m) = monitors.get(idx) {
+                let s = m.size();
+                let p = m.position();
+                return Some((p.x, p.y, s.width as i32, s.height as i32));
+            }
         }
-        if let Ok(Some(m)) = win.primary_monitor() {
-            let s = m.size(); let p = m.position();
-            return Some((s.width as i32, s.height as i32, p.x, p.y));
-        }
+    }
+    if let Ok(Some(m)) = win.current_monitor() {
+        let s = m.size(); let p = m.position();
+        return Some((p.x, p.y, s.width as i32, s.height as i32));
+    }
+    if let Ok(Some(m)) = win.primary_monitor() {
+        let s = m.size(); let p = m.position();
+        return Some((p.x, p.y, s.width as i32, s.height as i32));
     }
     None
 }
 
+// position は "top-left", "top-center", ..., "bottom-right" の9種
+// stack_idx: 0 が「最新」(基準位置)、1, 2, ... がそれより古い
+fn calc_position(
+    mx: i32, my: i32, mw: i32, mh: i32,
+    position: &str,
+    stack_idx: i32,
+) -> (i32, i32) {
+    let stack_offset = stack_idx * STACK_SPACING;
+    let parts: Vec<&str> = position.split('-').collect();
+    let v = parts.first().copied().unwrap_or("bottom");
+    let h = parts.get(1).copied().unwrap_or("right");
+
+    let x = match h {
+        "left"   => mx + SCREEN_MARGIN,
+        "center" => mx + (mw - NOTIF_W) / 2,
+        _        => mx + mw - NOTIF_W - SCREEN_MARGIN,  // right
+    };
+    let y_base = match v {
+        "top"    => my + SCREEN_MARGIN,
+        "middle" => my + (mh - NOTIF_H) / 2,
+        _        => my + mh - NOTIF_H - SCREEN_MARGIN,  // bottom
+    };
+    // top の場合は古いものが下に、bottom/middle の場合は古いものが上に積む
+    let y = if v == "top" { y_base + stack_offset } else { y_base - stack_offset };
+    (x, y)
+}
+
 fn emit_notification_positions(
     app_handle: &tauri::AppHandle,
+    state: &tauri::State<'_, NotificationState>,
     active: &[String],
     skip_label: Option<&str>,
 ) {
-    let spacing = 110;
-    let base_y = 140;
-    let Some((sw, sh, sx, sy)) = get_screen_rect(app_handle) else { return };
-    let tx = sx + sw - 380;
+    let last = state.last_position.lock().unwrap();
+    let (monitor_idx, position) = match last.as_ref() {
+        Some((m, p)) => (*m, p.clone()),
+        None => (None, "bottom-right".to_string()),
+    };
+    drop(last);
+
+    let Some((mx, my, mw, mh)) = get_monitor_rect(app_handle, monitor_idx) else { return };
 
     for (i, label) in active.iter().rev().enumerate() {
         if skip_label.map_or(false, |s| s == label) { continue; }
-        let ty = sy + sh - base_y - (i as i32 * spacing);
+        let (tx, ty) = calc_position(mx, my, mw, mh, &position, i as i32);
         if let Some(win) = app_handle.get_webview_window(label) {
             let _ = win.emit("move-to", serde_json::json!({ "x": tx, "y": ty }));
         }
     }
+}
+
+#[tauri::command]
+fn get_available_monitors(app_handle: tauri::AppHandle) -> Vec<MonitorInfo> {
+    let Some(win) = app_handle.get_webview_window("main") else { return vec![]; };
+    let monitors = match win.available_monitors() {
+        Ok(m) => m,
+        Err(_) => return vec![],
+    };
+    let primary = win.primary_monitor().ok().flatten();
+    let primary_pos = primary.as_ref().map(|m| {
+        let p = m.position();
+        (p.x, p.y)
+    });
+
+    monitors.iter().enumerate().map(|(idx, m)| {
+        let s = m.size();
+        let p = m.position();
+        let is_primary = primary_pos.map_or(false, |(px, py)| px == p.x && py == p.y);
+        MonitorInfo {
+            index: idx,
+            name: m.name().cloned().unwrap_or_else(|| format!("Display {}", idx + 1)),
+            x: p.x,
+            y: p.y,
+            width: s.width,
+            height: s.height,
+            is_primary,
+            scale_factor: m.scale_factor(),
+        }
+    }).collect()
 }
 
 #[tauri::command]
@@ -47,7 +142,9 @@ fn show_notification_window(
     title: String,
     body: String,
     room_id: String,
-) {
+    monitor_index: Option<usize>,
+    position: Option<String>,
+) -> Result<(), String> {
     let id = uuid::Uuid::new_v4().to_string();
     let label = format!("notification_{}", id);
     let url = format!(
@@ -58,14 +155,21 @@ fn show_notification_window(
         urlencoding::encode(&id)
     );
 
-    let screen_rect = get_screen_rect(&app_handle);
+    let pos_key = position.unwrap_or_else(|| "bottom-right".to_string());
+    // 設定をstateに保存（close時の再配置でも使う）
+    {
+        let mut last = state.last_position.lock().unwrap();
+        *last = Some((monitor_index, pos_key.clone()));
+    }
+
+    let monitor_rect = get_monitor_rect(&app_handle, monitor_index);
 
     let notification_window = WebviewWindowBuilder::new(
         &app_handle,
         &label,
         tauri::WebviewUrl::App(url.into()),
     )
-    .inner_size(360.0, 100.0)
+    .inner_size(NOTIF_W as f64, NOTIF_H as f64)
     .always_on_top(true)
     .decorations(false)
     .transparent(true)
@@ -73,26 +177,30 @@ fn show_notification_window(
     .resizable(false)
     .visible(false)
     .build()
-    .unwrap();
+    .map_err(|e| format!("WebviewWindowBuilder build failed: {}", e))?;
 
     {
         let mut active = state.active_notifications.lock().unwrap();
         let new_index = active.len();
 
         // 新しいウィンドウを表示前に正しい位置に配置
-        if let Some((sw, sh, sx, sy)) = screen_rect {
-            let tx = sx + sw - 380;
-            let ty = sy + sh - 140 - (new_index as i32 * 110);
-            let _ = notification_window.set_position(tauri::PhysicalPosition { x: tx, y: ty });
+        if let Some((mx, my, mw, mh)) = monitor_rect {
+            let (tx, ty) = calc_position(mx, my, mw, mh, &pos_key, new_index as i32);
+            notification_window
+                .set_position(tauri::PhysicalPosition { x: tx, y: ty })
+                .map_err(|e| format!("set_position failed: {}", e))?;
         }
 
         active.push(label.clone());
 
-        // 既存ウィンドウをアニメーション付きで上にスライド
-        emit_notification_positions(&app_handle, &active, Some(&label));
+        // 既存ウィンドウをアニメーション付きで反対方向にスライド
+        emit_notification_positions(&app_handle, &state, &active, Some(&label));
     }
 
-    let _ = notification_window.show();
+    notification_window
+        .show()
+        .map_err(|e| format!("show failed: {}", e))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -107,7 +215,7 @@ fn close_notification(
     let mut active = state.active_notifications.lock().unwrap();
     if let Some(pos) = active.iter().position(|l| l == &label) {
         active.remove(pos);
-        emit_notification_positions(&app_handle, &active, None);
+        emit_notification_positions(&app_handle, &state, &active, None);
     }
 }
 
@@ -145,6 +253,7 @@ pub fn run() {
         show_notification_window,
         close_notification,
         update_shortcut_key,
+        get_available_monitors,
     ])
     .setup(|app| {
       let _handle = app.handle().clone();
