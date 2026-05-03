@@ -164,30 +164,44 @@ fn show_notification_window(
 
     let monitor_rect = get_monitor_rect(&app_handle, monitor_index);
 
-    // 注: transparent(true) は Tauri v2 + WebView2 の一部 Windows 環境で
-    // ウィンドウが完全に不可視になるバグがあるため使わない。
-    // 角丸・シャドウは諦めるが、確実に表示されることを優先。
+    // 注:
+    // - transparent(true) は Tauri v2 + WebView2 の一部 Windows 環境で
+    //   ウィンドウが完全に不可視になるバグがあるため使わない
+    // - visible(false) → show() のパターンも一部環境で show() が
+    //   無視されるバグがあるため、最初から visible(true) で画面外に作って
+    //   set_position で正しい位置に移動する方式に変更
+    let new_index = state.active_notifications.lock().unwrap().len();
+
+    // 最終的に表示したい位置を計算
+    let target_pos = monitor_rect.map(|(mx, my, mw, mh)| {
+        calc_position(mx, my, mw, mh, &pos_key, new_index as i32)
+    });
+
+    // ビルド時には画面外に置いてフラッシュを防ぐ
+    let initial_x = target_pos.map(|(x, _)| x).unwrap_or(-9999);
+    let initial_y = target_pos.map(|(_, y)| y).unwrap_or(-9999);
+
     let notification_window = WebviewWindowBuilder::new(
         &app_handle,
         &label,
         tauri::WebviewUrl::App(url.into()),
     )
     .inner_size(NOTIF_W as f64, NOTIF_H as f64)
+    .position(initial_x as f64, initial_y as f64)
     .always_on_top(true)
     .decorations(false)
     .skip_taskbar(true)
     .resizable(false)
-    .visible(false)
+    .focused(false)
+    // visible はデフォルト true。明示的な show() は呼ばない
     .build()
     .map_err(|e| format!("WebviewWindowBuilder build failed: {}", e))?;
 
     {
         let mut active = state.active_notifications.lock().unwrap();
-        let new_index = active.len();
 
-        // 新しいウィンドウを表示前に正しい位置に配置
-        if let Some((mx, my, mw, mh)) = monitor_rect {
-            let (tx, ty) = calc_position(mx, my, mw, mh, &pos_key, new_index as i32);
+        // physical pixel での正確な位置に再設定（DPI対応）
+        if let Some((tx, ty)) = target_pos {
             notification_window
                 .set_position(tauri::PhysicalPosition { x: tx, y: ty })
                 .map_err(|e| format!("set_position failed: {}", e))?;
@@ -199,9 +213,6 @@ fn show_notification_window(
         emit_notification_positions(&app_handle, &state, &active, Some(&label));
     }
 
-    notification_window
-        .show()
-        .map_err(|e| format!("show failed: {}", e))?;
     Ok(())
 }
 
