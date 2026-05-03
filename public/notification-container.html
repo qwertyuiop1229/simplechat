@@ -9,7 +9,7 @@
     html, body {
       margin: 0; padding: 0;
       width: 100%;
-      height: 100%;
+      min-height: 100vh;
       background: #f9fafb;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Meiryo", "Hiragino Sans", sans-serif;
       overflow: hidden;
@@ -17,11 +17,26 @@
       -webkit-user-select: none;
     }
 
+    /* === 診断バー（最初は表示、ready 後に消える） === */
+    #diag {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: #fef3c7;
+      color: #78350f;
+      padding: 4px 8px;
+      font: bold 10px ui-monospace, "Consolas", monospace;
+      border-bottom: 1px solid #92400e;
+      z-index: 9999;
+      white-space: pre;
+    }
+    #diag.ok { background: #d1fae5; color: #065f46; border-bottom-color: #047857; }
+    #diag.error { background: #fee2e2; color: #991b1b; border-bottom-color: #b91c1c; }
+
     #notifList {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      padding: 6px;
+      padding: 26px 6px 6px;  /* 上は diag 分の余白 */
       height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
@@ -47,193 +62,171 @@
       cursor: pointer;
       transition: background-color 0.15s, border-left-color 0.15s;
     }
-    .notif-card:hover {
-      background: #fafafa;
-      border-left-color: #111827;
-    }
+    .notif-card:hover { background: #fafafa; border-left-color: #111827; }
     .notif-card.from-bottom { animation: slideInUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
     .notif-card.from-top    { animation: slideInDown 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
     .notif-card.dismissing  { animation: fadeOut 0.45s ease forwards; pointer-events: none; }
 
-    @keyframes slideInUp {
-      from { transform: translateY(14px); opacity: 0; }
-      to   { transform: translateY(0);    opacity: 1; }
-    }
-    @keyframes slideInDown {
-      from { transform: translateY(-14px); opacity: 0; }
-      to   { transform: translateY(0);     opacity: 1; }
-    }
-    @keyframes fadeOut {
-      from { opacity: 1; transform: scale(1); }
-      to   { opacity: 0; transform: scale(0.97); }
-    }
+    @keyframes slideInUp   { from { transform: translateY(14px);  opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideInDown { from { transform: translateY(-14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut     { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.97); } }
 
     .notif-icon {
       width: 26px; height: 26px;
       border-radius: 5px;
       background: #f3f4f6;
       color: #4b5563;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
       flex-shrink: 0;
       margin-top: 1px;
-      font-weight: 700;
     }
-
     .notif-text { flex: 1; min-width: 0; padding-right: 2px; }
-    .notif-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #111827;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 1px;
-    }
-    .notif-body {
-      font-size: 11px;
-      color: #6b7280;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.3;
-    }
-
+    .notif-title { font-size: 12px; font-weight: 600; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 1px; }
+    .notif-body { font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
     .notif-close {
-      background: none;
-      border: none;
-      width: 18px; height: 18px;
-      border-radius: 3px;
-      color: #9ca3af;
-      cursor: pointer;
-      flex-shrink: 0;
-      font-size: 11px;
-      line-height: 1;
+      background: none; border: none; width: 18px; height: 18px;
+      border-radius: 3px; color: #9ca3af; cursor: pointer; flex-shrink: 0;
+      font-size: 11px; line-height: 1;
       transition: color 0.15s, background-color 0.15s;
     }
     .notif-close:hover { color: #374151; background: #f3f4f6; }
   </style>
 </head>
 <body>
+  <!-- 診断バー（status はここに即時更新される。問題切り分け後 ready で 3 秒後に消える） -->
+  <div id="diag">起動中...</div>
+
   <div id="notifList"></div>
 
   <script>
     (function () {
-      const tauri = window.__TAURI__ || {};
-      const invoke = tauri.core?.invoke || (() => Promise.resolve());
-      const listenFn = tauri.event?.listen || (() => Promise.resolve(() => {}));
-      const emitFn = tauri.event?.emit || (() => Promise.resolve());
-
-      const list = document.getElementById('notifList');
-      let stackDirection = 'up'; // 'up' = 下から積む / 'down' = 上から積む
-
-      function applyStackDirection(dir) {
-        stackDirection = dir;
-        list.style.flexDirection = dir === 'up' ? 'column-reverse' : 'column';
+      const diag = document.getElementById('diag');
+      let stepCount = 0;
+      function setDiag(msg, kind) {
+        stepCount++;
+        diag.textContent = `[${stepCount}] ${msg}`;
+        diag.className = kind || '';
+        // 例外が出ても画面に表示されるよう DOM 同期
+        try { diag.offsetHeight; } catch(_) {}
       }
 
-      function syncContainerHeight() {
-        const targetH = Math.ceil(list.scrollHeight + 4);
-        invoke('resize_notif_container', { height: Math.max(80, targetH) }).catch(() => {});
-      }
+      try {
+        setDiag('JS 起動');
 
-      function dismiss(card) {
-        if (card.classList.contains('dismissing')) return;
-        card.classList.add('dismissing');
-        setTimeout(() => {
-          card.remove();
-          if (list.children.length === 0) {
-            invoke('hide_notif_container').catch(() => {});
-          } else {
-            syncContainerHeight();
-          }
-        }, 460);
-      }
+        const tauri = window.__TAURI__;
+        if (!tauri) { setDiag('NG: window.__TAURI__ なし', 'error'); return; }
+        setDiag('Tauri OK');
 
-      function addCard(payload) {
-        const { id, title, body, roomId } = payload;
-        const card = document.createElement('div');
-        card.className = 'notif-card ' + (stackDirection === 'up' ? 'from-bottom' : 'from-top');
-        card.dataset.id = id;
+        const invoke = tauri.core?.invoke;
+        const listenFn = tauri.event?.listen;
+        const emitFn = tauri.event?.emit;
 
-        const iconDiv = document.createElement('div');
-        iconDiv.className = 'notif-icon';
-        iconDiv.textContent = '✉'; // CDN 不要の Unicode
+        if (!invoke) { setDiag('NG: invoke なし', 'error'); return; }
+        if (!listenFn) { setDiag('NG: listen なし', 'error'); return; }
+        setDiag('API OK');
 
-        const textDiv = document.createElement('div');
-        textDiv.className = 'notif-text';
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'notif-title';
-        titleDiv.textContent = title || 'SimpleChat';
-        const bodyDiv = document.createElement('div');
-        bodyDiv.className = 'notif-body';
-        bodyDiv.textContent = body || '';
-        textDiv.appendChild(titleDiv);
-        textDiv.appendChild(bodyDiv);
+        const list = document.getElementById('notifList');
+        let stackDirection = 'up';
 
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'notif-close';
-        closeBtn.type = 'button';
-        closeBtn.textContent = '✕';
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          dismiss(card);
-        });
-
-        card.appendChild(iconDiv);
-        card.appendChild(textDiv);
-        card.appendChild(closeBtn);
-
-        card.addEventListener('click', () => {
-          if (roomId) emitFn('open-room', { roomId });
-          dismiss(card);
-        });
-
-        if (stackDirection === 'up') {
-          list.insertBefore(card, list.firstChild);
-        } else {
-          list.appendChild(card);
+        function applyStackDirection(dir) {
+          stackDirection = dir;
+          list.style.flexDirection = dir === 'up' ? 'column-reverse' : 'column';
         }
 
-        requestAnimationFrame(() => {
-          syncContainerHeight();
-          if (stackDirection === 'down') {
-            list.scrollTop = list.scrollHeight;
+        function syncContainerHeight() {
+          const targetH = Math.ceil(list.scrollHeight + 30);  // diag 分加算
+          invoke('resize_notif_container', { height: Math.max(80, targetH) }).catch(() => {});
+        }
+
+        function dismiss(card) {
+          if (card.classList.contains('dismissing')) return;
+          card.classList.add('dismissing');
+          setTimeout(() => {
+            card.remove();
+            if (list.children.length === 0) {
+              invoke('hide_notif_container').catch(() => {});
+            } else {
+              syncContainerHeight();
+            }
+          }, 460);
+        }
+
+        function addCard(payload) {
+          setDiag('カード追加: ' + (payload?.title || '?'), 'ok');
+          const { id, title, body, roomId } = payload;
+          const card = document.createElement('div');
+          card.className = 'notif-card ' + (stackDirection === 'up' ? 'from-bottom' : 'from-top');
+          card.dataset.id = id;
+
+          const iconDiv = document.createElement('div');
+          iconDiv.className = 'notif-icon';
+          iconDiv.textContent = '✉';
+
+          const textDiv = document.createElement('div');
+          textDiv.className = 'notif-text';
+          const titleDiv = document.createElement('div');
+          titleDiv.className = 'notif-title';
+          titleDiv.textContent = title || 'SimpleChat';
+          const bodyDiv = document.createElement('div');
+          bodyDiv.className = 'notif-body';
+          bodyDiv.textContent = body || '';
+          textDiv.appendChild(titleDiv); textDiv.appendChild(bodyDiv);
+
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'notif-close';
+          closeBtn.type = 'button';
+          closeBtn.textContent = '✕';
+          closeBtn.addEventListener('click', (e) => { e.stopPropagation(); dismiss(card); });
+
+          card.appendChild(iconDiv); card.appendChild(textDiv); card.appendChild(closeBtn);
+          card.addEventListener('click', () => {
+            if (roomId && emitFn) emitFn('open-room', { roomId });
+            dismiss(card);
+          });
+
+          if (stackDirection === 'up') {
+            list.insertBefore(card, list.firstChild);
           } else {
-            list.scrollTop = 0;
+            list.appendChild(card);
           }
+
+          requestAnimationFrame(() => {
+            syncContainerHeight();
+            if (stackDirection === 'down') list.scrollTop = list.scrollHeight;
+            else list.scrollTop = 0;
+          });
+
+          // 3 秒後に診断バーを消す
+          setTimeout(() => { diag.style.display = 'none'; }, 100);
+          setTimeout(() => dismiss(card), 5000);
+        }
+
+        // === リスナー登録 → ready 通知 ===
+        Promise.all([
+          listenFn('new-notif', (event) => {
+            const payload = event.payload || {};
+            if (payload.stackDir && payload.stackDir !== stackDirection) {
+              applyStackDirection(payload.stackDir);
+            }
+            addCard(payload);
+          }),
+          listenFn('clear-all', () => {
+            list.innerHTML = '';
+            invoke('hide_notif_container').catch(() => {});
+          }),
+        ]).then(() => {
+          setDiag('リスナー登録完了 → ready 通知中');
+          return invoke('container_loaded');
+        }).then(() => {
+          setDiag('Ready ✓ 通知待機中', 'ok');
+        }).catch((e) => {
+          setDiag('NG: ' + (e?.message || e), 'error');
         });
 
-        setTimeout(() => dismiss(card), 5000);
+      } catch (e) {
+        setDiag('例外: ' + (e?.message || e), 'error');
       }
-
-      // リスナーを先に登録 → 全部終わってから container_loaded を呼ぶ
-      Promise.all([
-        listenFn('new-notif', (event) => {
-          const payload = event.payload || {};
-          console.log('[NotifContainer] new-notif received', payload);
-          if (payload.stackDir && payload.stackDir !== stackDirection) {
-            applyStackDirection(payload.stackDir);
-          }
-          addCard(payload);
-        }),
-        listenFn('clear-all', () => {
-          list.innerHTML = '';
-          invoke('hide_notif_container').catch(() => {});
-        }),
-      ]).then(() => {
-        console.log('[NotifContainer] listeners ready, calling container_loaded');
-        // Rust に「準備完了」を通知 → 溜まってる通知が flush される
-        return invoke('container_loaded');
-      }).then(() => {
-        console.log('[NotifContainer] container_loaded ack');
-      }).catch((e) => {
-        console.error('[NotifContainer] init failed', e);
-      });
-
-      console.log('[NotifContainer] script started. tauri=' + !!window.__TAURI__);
     })();
   </script>
 </body>

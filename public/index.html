@@ -1237,6 +1237,9 @@
                             <button id="testNotifBtn" class="w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-bold text-gray-700 transition-colors">
                                 <i class="fas fa-bell mr-1"></i> テスト通知を表示
                             </button>
+                            <button id="openLogDirBtn" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-500 transition-colors">
+                                <i class="fas fa-folder-open mr-1"></i> ログフォルダを開く（デバッグ用）
+                            </button>
                         </div>
                     </div>
 
@@ -4242,6 +4245,14 @@
           });
           document.getElementById('testNotifBtn').addEventListener('click', () => {
             showNotification('テスト通知', 'これはテストメッセージです', '');
+          });
+          document.getElementById('openLogDirBtn').addEventListener('click', async () => {
+            try {
+              const path = await window.__TAURI__.core.invoke('open_log_dir');
+              console.log('[Log] dir opened:', path);
+            } catch(e) {
+              alert('ログフォルダを開けませんでした: ' + (e?.message || e));
+            }
           });
 
           toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';

@@ -356,6 +356,23 @@ fn open_devtools_for_container(app_handle: tauri::AppHandle) {
     }
 }
 
+// ログディレクトリをエクスプローラーで開く
+#[tauri::command]
+fn open_log_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let path = app_handle
+        .path()
+        .app_log_dir()
+        .map_err(|e| format!("app_log_dir failed: {}", e))?;
+    let path_str = path.to_string_lossy().to_string();
+    log::info!("Opening log dir: {}", path_str);
+    // explorer で開く
+    std::process::Command::new("explorer")
+        .arg(&path_str)
+        .spawn()
+        .map_err(|e| format!("spawn explorer failed: {}", e))?;
+    Ok(path_str)
+}
+
 #[tauri::command]
 fn save_notification_position(
     app_handle: tauri::AppHandle,
@@ -613,6 +630,7 @@ pub fn run() {
             update_shortcut_key,
             open_devtools_for_picker,
             open_devtools_for_container,
+            open_log_dir,
         ])
         .setup(|app| {
             let _handle = app.handle().clone();
