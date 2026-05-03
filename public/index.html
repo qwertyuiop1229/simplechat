@@ -3814,8 +3814,8 @@
           if (metadata) {
             console.log('Update available:', metadata.version);
 
-            // Tauri v2 plugin-updater は download → install の2段階。
-            // resource ID (rid) を全コマンドに渡す必要がある。
+            // Tauri v2 plugin-updater (v2.10+) は download → install の2段階。
+            // パラメーター名は rid ではなく updateRid (Rust 側 update_rid の camelCase)。
             const Channel = window.__TAURI__?.core?.Channel;
             const rid = metadata.rid;
             pendingUpdate = {
@@ -3823,8 +3823,8 @@
               version: metadata.version,
               body: metadata.body,
               downloadAndInstall: async () => {
-                console.log('[Updater] Starting download, rid:', rid);
-                const downloadArgs = { rid: rid };
+                console.log('[Updater] Starting download, updateRid:', rid);
+                const downloadArgs = { updateRid: rid };
                 if (Channel) {
                   const channel = new Channel();
                   channel.onmessage = (msg) => console.log('[Updater] event:', msg);
@@ -3832,7 +3832,7 @@
                 }
                 await invoke('plugin:updater|download', downloadArgs);
                 console.log('[Updater] Download complete, installing...');
-                await invoke('plugin:updater|install', { rid: rid });
+                await invoke('plugin:updater|install', { updateRid: rid });
                 console.log('[Updater] Install complete');
               }
             };
