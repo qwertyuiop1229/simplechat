@@ -209,20 +209,31 @@
         setTimeout(() => dismiss(card), 5000);
       }
 
-      listenFn('new-notif', (event) => {
-        const payload = event.payload || {};
-        if (payload.stackDir && payload.stackDir !== stackDirection) {
-          applyStackDirection(payload.stackDir);
-        }
-        addCard(payload);
-      }).catch(console.error);
+      // リスナーを先に登録 → 全部終わってから container_loaded を呼ぶ
+      Promise.all([
+        listenFn('new-notif', (event) => {
+          const payload = event.payload || {};
+          console.log('[NotifContainer] new-notif received', payload);
+          if (payload.stackDir && payload.stackDir !== stackDirection) {
+            applyStackDirection(payload.stackDir);
+          }
+          addCard(payload);
+        }),
+        listenFn('clear-all', () => {
+          list.innerHTML = '';
+          invoke('hide_notif_container').catch(() => {});
+        }),
+      ]).then(() => {
+        console.log('[NotifContainer] listeners ready, calling container_loaded');
+        // Rust に「準備完了」を通知 → 溜まってる通知が flush される
+        return invoke('container_loaded');
+      }).then(() => {
+        console.log('[NotifContainer] container_loaded ack');
+      }).catch((e) => {
+        console.error('[NotifContainer] init failed', e);
+      });
 
-      listenFn('clear-all', () => {
-        list.innerHTML = '';
-        invoke('hide_notif_container').catch(() => {});
-      }).catch(console.error);
-
-      console.log('[NotifContainer] loaded. tauri=' + !!window.__TAURI__);
+      console.log('[NotifContainer] script started. tauri=' + !!window.__TAURI__);
     })();
   </script>
 </body>

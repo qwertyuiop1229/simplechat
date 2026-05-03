@@ -24,9 +24,20 @@ struct SavedPosition {
     stack_direction: String, // "up" (新着が下、古いのが上) | "down" (新着が上、古いのが下)
 }
 
+#[derive(Clone)]
+struct PendingNotif {
+    id: String,
+    title: String,
+    body: String,
+    room_id: String,
+    stack_dir: String,
+}
+
 #[derive(Default)]
 struct NotificationState {
     saved_position: Mutex<Option<SavedPosition>>,
+    container_ready: Mutex<bool>,
+    pending: Mutex<Vec<PendingNotif>>,
 }
 
 #[derive(serde::Serialize)]
@@ -190,12 +201,15 @@ fn enqueue_notification(
     body: String,
     room_id: String,
 ) -> Result<(), String> {
+    log::info!("enqueue_notification: title={}, body={}", title, body);
+
     let saved = state.saved_position.lock().unwrap().clone();
     let (window, was_new) = ensure_container_window(&app_handle)?;
 
-    // 新規作成時は HTML/JS が listen 登録するまで少し待つ
     if was_new {
-        std::thread::sleep(std::time::Duration::from_millis(350));
+        // 新規作成時は ready フラグをクリア（JS が container_loaded 呼ぶまで未準備）
+        *state.container_ready.lock().unwrap() = false;
+        log::info!("Container window created, waiting for ready signal");
     }
 
     // 物理ピクセルで正確な位置に移動
@@ -211,19 +225,63 @@ fn enqueue_notification(
         .unwrap_or_else(|| "up".to_string());
 
     let id = uuid::Uuid::new_v4().to_string();
-    window
-        .emit(
-            "new-notif",
-            serde_json::json!({
-                "id": id,
-                "title": title,
-                "body": body,
-                "roomId": room_id,
-                "stackDir": stack_dir,
-            }),
-        )
-        .map_err(|e| format!("emit failed: {}", e))?;
+    let payload = serde_json::json!({
+        "id": id,
+        "title": title.clone(),
+        "body": body.clone(),
+        "roomId": room_id.clone(),
+        "stackDir": stack_dir.clone(),
+    });
 
+    let ready = *state.container_ready.lock().unwrap();
+    if ready {
+        log::info!("Container ready, emitting new-notif directly");
+        window
+            .emit("new-notif", payload)
+            .map_err(|e| format!("emit failed: {}", e))?;
+    } else {
+        log::info!("Container not ready, queueing notification");
+        state.pending.lock().unwrap().push(PendingNotif {
+            id,
+            title,
+            body,
+            room_id,
+            stack_dir,
+        });
+    }
+
+    Ok(())
+}
+
+// コンテナの JS が起動完了したときに呼ばれる
+#[tauri::command]
+fn container_loaded(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, NotificationState>,
+) -> Result<(), String> {
+    log::info!("container_loaded called");
+    *state.container_ready.lock().unwrap() = true;
+
+    // 溜まっている notifications をすべて flush
+    let pending: Vec<PendingNotif> = std::mem::take(&mut *state.pending.lock().unwrap());
+    log::info!("Flushing {} pending notifications", pending.len());
+
+    let window = app_handle
+        .get_webview_window(CONTAINER_LABEL)
+        .ok_or_else(|| "container not found".to_string())?;
+
+    for p in pending {
+        let payload = serde_json::json!({
+            "id": p.id,
+            "title": p.title,
+            "body": p.body,
+            "roomId": p.room_id,
+            "stackDir": p.stack_dir,
+        });
+        if let Err(e) = window.emit("new-notif", payload) {
+            log::error!("flush emit failed: {}", e);
+        }
+    }
     Ok(())
 }
 
@@ -541,6 +599,7 @@ pub fn run() {
         .manage(NotificationState::default())
         .invoke_handler(tauri::generate_handler![
             enqueue_notification,
+            container_loaded,
             hide_notif_container,
             resize_notif_container,
             close_notification,
