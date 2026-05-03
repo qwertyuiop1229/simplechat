@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>通知</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0;
+      width: 100%;
       height: 100%;
       background: #f9fafb;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Meiryo", "Hiragino Sans", sans-serif;
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
@@ -19,16 +19,16 @@
 
     #notifList {
       display: flex;
-      flex-direction: column;        /* default: 上から下 (top stack 用) */
-      gap: 8px;
-      padding: 10px;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px;
       height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
       scrollbar-width: thin;
       scrollbar-color: #d1d5db transparent;
     }
-    #notifList::-webkit-scrollbar { width: 6px; }
+    #notifList::-webkit-scrollbar { width: 5px; }
     #notifList::-webkit-scrollbar-track { background: transparent; }
     #notifList::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
     #notifList::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
@@ -37,13 +37,13 @@
       flex-shrink: 0;
       background: #ffffff;
       border: 1px solid #e5e7eb;
-      border-left: 3px solid #1f2937;        /* ダークグレーの左アクセント */
-      border-radius: 8px;
-      padding: 11px 13px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04); /* ごく軽いシャドウ */
+      border-left: 3px solid #1f2937;
+      border-radius: 7px;
+      padding: 8px 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       display: flex;
       align-items: flex-start;
-      gap: 10px;
+      gap: 8px;
       cursor: pointer;
       transition: background-color 0.15s, border-left-color 0.15s;
     }
@@ -51,17 +51,16 @@
       background: #fafafa;
       border-left-color: #111827;
     }
-
     .notif-card.from-bottom { animation: slideInUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
     .notif-card.from-top    { animation: slideInDown 0.32s cubic-bezier(0.16, 1, 0.3, 1) both; }
     .notif-card.dismissing  { animation: fadeOut 0.45s ease forwards; pointer-events: none; }
 
     @keyframes slideInUp {
-      from { transform: translateY(18px); opacity: 0; }
+      from { transform: translateY(14px); opacity: 0; }
       to   { transform: translateY(0);    opacity: 1; }
     }
     @keyframes slideInDown {
-      from { transform: translateY(-18px); opacity: 0; }
+      from { transform: translateY(-14px); opacity: 0; }
       to   { transform: translateY(0);     opacity: 1; }
     }
     @keyframes fadeOut {
@@ -70,50 +69,48 @@
     }
 
     .notif-icon {
-      width: 30px; height: 30px;
-      border-radius: 6px;
+      width: 26px; height: 26px;
+      border-radius: 5px;
       background: #f3f4f6;
       color: #4b5563;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.85rem;
+      font-size: 13px;
       flex-shrink: 0;
       margin-top: 1px;
+      font-weight: 700;
     }
 
-    .notif-text { flex: 1; min-width: 0; padding-right: 4px; }
+    .notif-text { flex: 1; min-width: 0; padding-right: 2px; }
     .notif-title {
-      font-size: 0.82rem;
+      font-size: 12px;
       font-weight: 600;
       color: #111827;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      margin-bottom: 2px;
-      letter-spacing: 0.01em;
+      margin-bottom: 1px;
     }
     .notif-body {
-      font-size: 0.74rem;
+      font-size: 11px;
       color: #6b7280;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      line-height: 1.35;
+      line-height: 1.3;
     }
 
     .notif-close {
       background: none;
       border: none;
-      width: 22px; height: 22px;
-      border-radius: 4px;
+      width: 18px; height: 18px;
+      border-radius: 3px;
       color: #9ca3af;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
       flex-shrink: 0;
+      font-size: 11px;
+      line-height: 1;
       transition: color 0.15s, background-color 0.15s;
     }
     .notif-close:hover { color: #374151; background: #f3f4f6; }
@@ -123,110 +120,110 @@
   <div id="notifList"></div>
 
   <script>
-    const { listen, emit } = window.__TAURI__.event;
-    const { invoke } = window.__TAURI__.core;
+    (function () {
+      const tauri = window.__TAURI__ || {};
+      const invoke = tauri.core?.invoke || (() => Promise.resolve());
+      const listenFn = tauri.event?.listen || (() => Promise.resolve(() => {}));
+      const emitFn = tauri.event?.emit || (() => Promise.resolve());
 
-    const list = document.getElementById('notifList');
-    let stackDirection = 'up'; // 'up' = 下から積む / 'down' = 上から積む
+      const list = document.getElementById('notifList');
+      let stackDirection = 'up'; // 'up' = 下から積む / 'down' = 上から積む
 
-    function applyStackDirection(dir) {
-      stackDirection = dir;
-      list.style.flexDirection = dir === 'up' ? 'column-reverse' : 'column';
-    }
+      function applyStackDirection(dir) {
+        stackDirection = dir;
+        list.style.flexDirection = dir === 'up' ? 'column-reverse' : 'column';
+      }
 
-    // コンテンツ高さに応じてコンテナをリサイズ
-    function syncContainerHeight() {
-      // padding 含めた実際の必要高さ
-      const targetH = Math.ceil(list.scrollHeight + 4);
-      invoke('resize_notif_container', { height: Math.max(80, targetH) }).catch(() => {});
-    }
+      function syncContainerHeight() {
+        const targetH = Math.ceil(list.scrollHeight + 4);
+        invoke('resize_notif_container', { height: Math.max(80, targetH) }).catch(() => {});
+      }
 
-    function dismiss(card) {
-      if (card.classList.contains('dismissing')) return;
-      card.classList.add('dismissing');
-      setTimeout(() => {
-        card.remove();
-        if (list.children.length === 0) {
-          invoke('hide_notif_container').catch(() => {});
+      function dismiss(card) {
+        if (card.classList.contains('dismissing')) return;
+        card.classList.add('dismissing');
+        setTimeout(() => {
+          card.remove();
+          if (list.children.length === 0) {
+            invoke('hide_notif_container').catch(() => {});
+          } else {
+            syncContainerHeight();
+          }
+        }, 460);
+      }
+
+      function addCard(payload) {
+        const { id, title, body, roomId } = payload;
+        const card = document.createElement('div');
+        card.className = 'notif-card ' + (stackDirection === 'up' ? 'from-bottom' : 'from-top');
+        card.dataset.id = id;
+
+        const iconDiv = document.createElement('div');
+        iconDiv.className = 'notif-icon';
+        iconDiv.textContent = '✉'; // CDN 不要の Unicode
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'notif-text';
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'notif-title';
+        titleDiv.textContent = title || 'SimpleChat';
+        const bodyDiv = document.createElement('div');
+        bodyDiv.className = 'notif-body';
+        bodyDiv.textContent = body || '';
+        textDiv.appendChild(titleDiv);
+        textDiv.appendChild(bodyDiv);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'notif-close';
+        closeBtn.type = 'button';
+        closeBtn.textContent = '✕';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dismiss(card);
+        });
+
+        card.appendChild(iconDiv);
+        card.appendChild(textDiv);
+        card.appendChild(closeBtn);
+
+        card.addEventListener('click', () => {
+          if (roomId) emitFn('open-room', { roomId });
+          dismiss(card);
+        });
+
+        if (stackDirection === 'up') {
+          list.insertBefore(card, list.firstChild);
         } else {
+          list.appendChild(card);
+        }
+
+        requestAnimationFrame(() => {
           syncContainerHeight();
-        }
-      }, 460);
-    }
+          if (stackDirection === 'down') {
+            list.scrollTop = list.scrollHeight;
+          } else {
+            list.scrollTop = 0;
+          }
+        });
 
-    function addCard(payload) {
-      const { id, title, body, roomId } = payload;
-      const card = document.createElement('div');
-      card.className = 'notif-card ' + (stackDirection === 'up' ? 'from-bottom' : 'from-top');
-      card.dataset.id = id;
-
-      const iconDiv = document.createElement('div');
-      iconDiv.className = 'notif-icon';
-      iconDiv.innerHTML = '<i class="fas fa-comment-dots"></i>';
-
-      const textDiv = document.createElement('div');
-      textDiv.className = 'notif-text';
-      const titleDiv = document.createElement('div');
-      titleDiv.className = 'notif-title';
-      titleDiv.textContent = title || 'SimpleChat';
-      const bodyDiv = document.createElement('div');
-      bodyDiv.className = 'notif-body';
-      bodyDiv.textContent = body || '';
-      textDiv.appendChild(titleDiv);
-      textDiv.appendChild(bodyDiv);
-
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'notif-close';
-      closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dismiss(card);
-      });
-
-      card.appendChild(iconDiv);
-      card.appendChild(textDiv);
-      card.appendChild(closeBtn);
-
-      card.addEventListener('click', () => {
-        if (roomId) emit('open-room', { roomId });
-        dismiss(card);
-      });
-
-      // column-reverse のとき先頭に挿入すると視覚的には「下に新着」
-      if (stackDirection === 'up') {
-        list.insertBefore(card, list.firstChild);
-      } else {
-        list.appendChild(card);
+        setTimeout(() => dismiss(card), 5000);
       }
 
-      // 追加直後にコンテナリサイズ（アニメーション完了を待つために少し遅延）
-      requestAnimationFrame(() => {
-        syncContainerHeight();
-        if (stackDirection === 'down') {
-          list.scrollTop = list.scrollHeight;
-        } else {
-          list.scrollTop = 0;
+      listenFn('new-notif', (event) => {
+        const payload = event.payload || {};
+        if (payload.stackDir && payload.stackDir !== stackDirection) {
+          applyStackDirection(payload.stackDir);
         }
-      });
+        addCard(payload);
+      }).catch(console.error);
 
-      // 5秒後フェードアウト
-      setTimeout(() => dismiss(card), 5000);
-    }
+      listenFn('clear-all', () => {
+        list.innerHTML = '';
+        invoke('hide_notif_container').catch(() => {});
+      }).catch(console.error);
 
-    listen('new-notif', (event) => {
-      const payload = event.payload || {};
-      if (payload.stackDir && payload.stackDir !== stackDirection) {
-        applyStackDirection(payload.stackDir);
-      }
-      addCard(payload);
-    }).catch(console.error);
-
-    listen('clear-all', () => {
-      list.innerHTML = '';
-      invoke('hide_notif_container').catch(() => {});
-    }).catch(console.error);
-
-    // マウスホイールスクロールはネイティブで動くので追加実装不要
+      console.log('[NotifContainer] loaded. tauri=' + !!window.__TAURI__);
+    })();
   </script>
 </body>
 </html>

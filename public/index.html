@@ -3803,49 +3803,79 @@
           if (metadata) {
             console.log('Update available:', metadata.version);
 
-            // Tauri v2 plugin-updater: パラメーター名は updateRid。
-            // バージョンによって download_and_install 単発 or download+install 2段階。
-            // 互換性のため両方を順に試す。
+            // Tauri v2 plugin-updater のパラメーター名はバージョンで揺れる:
+            //   - 古いバージョン: rid
+            //   - 新しいバージョン: updateRid
+            //   - 同一バージョンでも download/install で異なる場合がある
+            // 確実性のため、両方の名前で試行するヘルパーで invoke する
             const Channel = window.__TAURI__?.core?.Channel;
             const rid = metadata.rid;
+
+            const tryInvokeWithRidVariants = async (cmd, extraArgs) => {
+              // パラメーター名のバリアントを順に試す
+              const variants = [
+                { rid },
+                { updateRid: rid },
+                { rid, updateRid: rid },
+              ];
+              let lastErr = null;
+              for (const v of variants) {
+                try {
+                  const args = { ...v, ...extraArgs };
+                  return await invoke(cmd, args);
+                } catch (e) {
+                  lastErr = e;
+                  const msg = String(e?.message || e || '').toLowerCase();
+                  // 「missing required key」「invalid args」系のエラーだけ次のバリアントに進む
+                  if (msg.includes('missing required key') || msg.includes('invalid args')) {
+                    console.warn(`[Updater] ${cmd} variant ${JSON.stringify(v)} not accepted, trying next`);
+                    continue;
+                  }
+                  // 別の種類のエラーは即時 throw
+                  throw e;
+                }
+              }
+              throw lastErr || new Error(`${cmd}: all variants failed`);
+            };
+
             pendingUpdate = {
               rid: rid,
               version: metadata.version,
               body: metadata.body,
               downloadAndInstall: async () => {
-                console.log('[Updater] Starting, updateRid:', rid);
+                console.log('[Updater] Starting, rid:', rid);
                 const makeChannel = () => {
                   if (!Channel) return null;
                   const ch = new Channel();
                   ch.onmessage = (msg) => console.log('[Updater event]', msg);
                   return ch;
                 };
+
                 // 1) まず download_and_install 単発を試す
                 try {
                   const ch = makeChannel();
-                  const args = { updateRid: rid };
-                  if (ch) args.onEvent = ch;
-                  await invoke('plugin:updater|download_and_install', args);
+                  const extra = ch ? { onEvent: ch } : {};
+                  await tryInvokeWithRidVariants('plugin:updater|download_and_install', extra);
                   console.log('[Updater] download_and_install OK');
                   return;
                 } catch (e1) {
                   console.warn('[Updater] download_and_install failed, trying download+install', e1);
-                  // 2) フォールバック: download → install 2段階
-                  try {
-                    const ch = makeChannel();
-                    const dArgs = { updateRid: rid };
-                    if (ch) dArgs.onEvent = ch;
-                    await invoke('plugin:updater|download', dArgs);
-                    console.log('[Updater] download OK, installing');
-                  } catch (e2) {
-                    throw new Error('download failed: ' + (e2?.message || JSON.stringify(e2)));
-                  }
-                  try {
-                    await invoke('plugin:updater|install', { updateRid: rid });
-                    console.log('[Updater] install OK');
-                  } catch (e3) {
-                    throw new Error('install failed: ' + (e3?.message || JSON.stringify(e3)));
-                  }
+                }
+
+                // 2) フォールバック: download → install 2段階
+                try {
+                  const ch = makeChannel();
+                  const extra = ch ? { onEvent: ch } : {};
+                  await tryInvokeWithRidVariants('plugin:updater|download', extra);
+                  console.log('[Updater] download OK, installing');
+                } catch (e2) {
+                  throw new Error('download failed: ' + (e2?.message || JSON.stringify(e2)));
+                }
+                try {
+                  await tryInvokeWithRidVariants('plugin:updater|install', {});
+                  console.log('[Updater] install OK');
+                } catch (e3) {
+                  throw new Error('install failed: ' + (e3?.message || JSON.stringify(e3)));
                 }
               }
             };

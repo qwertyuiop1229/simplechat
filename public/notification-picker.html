@@ -4,173 +4,208 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>通知位置を設定</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    /* CDN フォントは使わない（オフライン/Tauri 環境での失敗を避ける） */
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0;
+      width: 100%;
       height: 100%;
       background: #ffffff;
-      border: 2px dashed #1f2937;
-      border-radius: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Yu Gothic UI", "Meiryo", "Hiragino Sans", sans-serif;
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
+    }
+    body {
+      border: 2px solid #1f2937;
+      border-radius: 8px;
       display: flex;
       flex-direction: column;
     }
 
-    /* ドラッグ可能ヘッダー — Tauri が自動でハンドル */
     .drag-handle {
       cursor: move;
-      background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
+      background: #1f2937;
       color: #ffffff;
-      padding: 9px 12px;
-      font-size: 0.74rem;
+      padding: 8px 12px;
+      font-size: 12px;
       font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
       flex-shrink: 0;
-      letter-spacing: 0.02em;
     }
-    .drag-handle .left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .drag-handle .left i { font-size: 0.85rem; color: #9ca3af; }
 
-    /* プレビュー本体 */
     .preview-area {
-      cursor: move;        /* ドラッグ可能を視覚的に */
+      cursor: move;
       padding: 10px 12px;
       flex: 1;
+      display: flex;
+      align-items: center;
     }
+
     .preview-card {
+      width: 100%;
       background: #ffffff;
       border: 1px solid #e5e7eb;
       border-left: 3px solid #1f2937;
-      border-radius: 8px;
-      padding: 10px 12px;
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    }
-    .preview-icon {
-      width: 30px; height: 30px;
       border-radius: 6px;
-      background: #f3f4f6;
-      color: #4b5563;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
-      flex-shrink: 0;
+      padding: 8px 10px;
     }
-    .preview-text { flex: 1; min-width: 0; }
-    .preview-title { font-size: 0.82rem; font-weight: 600; color: #111827; margin-bottom: 2px; }
-    .preview-body { font-size: 0.74rem; color: #6b7280; line-height: 1.4; }
+    .preview-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 2px;
+    }
+    .preview-body {
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.35;
+    }
 
     .picker-buttons {
       display: flex;
-      gap: 8px;
-      padding: 8px 12px 12px;
+      gap: 6px;
+      padding: 6px 10px 10px;
       flex-shrink: 0;
     }
     .picker-buttons button {
       flex: 1;
-      padding: 9px 10px;
+      padding: 8px 10px;
       border: none;
-      border-radius: 6px;
-      font-size: 0.78rem;
+      border-radius: 5px;
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
-      transition: background-color 0.15s, color 0.15s;
     }
-    #cancelBtn {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-    #cancelBtn:hover { background: #e5e7eb; color: #374151; }
-    #saveBtn {
-      background: #1f2937;
-      color: #ffffff;
-    }
+    #cancelBtn { background: #f3f4f6; color: #6b7280; }
+    #cancelBtn:hover { background: #e5e7eb; }
+    #saveBtn { background: #1f2937; color: #ffffff; }
     #saveBtn:hover { background: #111827; }
 
     .close-x {
-      background: none;
+      background: rgba(255,255,255,0.15);
       border: none;
-      color: #9ca3af;
+      color: #ffffff;
       width: 22px; height: 22px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 0.75rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: color 0.15s, background 0.15s;
+      font-size: 13px;
+      line-height: 1;
+      font-weight: 700;
     }
-    .close-x:hover { color: #ffffff; background: rgba(255,255,255,0.1); }
+    .close-x:hover { background: rgba(255,255,255,0.3); }
+
+    #status {
+      font-size: 10px;
+      color: #6b7280;
+      text-align: center;
+      padding: 0 10px 4px;
+    }
   </style>
 </head>
 <body>
-  <!-- ドラッグハンドル: data-tauri-drag-region により Tauri が自動で OS ドラッグ起動 -->
+  <!-- ドラッグハンドル: data-tauri-drag-region で Tauri に伝える -->
   <div class="drag-handle" data-tauri-drag-region>
-    <div class="left" data-tauri-drag-region>
-      <i class="fas fa-arrows-alt" data-tauri-drag-region></i>
-      <span data-tauri-drag-region>ここをドラッグして移動</span>
-    </div>
-    <button class="close-x" id="closeXBtn" title="キャンセル"><i class="fas fa-times"></i></button>
+    <span data-tauri-drag-region>⤧ ドラッグして移動</span>
+    <button class="close-x" id="closeXBtn" type="button">✕</button>
   </div>
 
-  <!-- プレビュー領域も丸ごとドラッグ可能 -->
   <div class="preview-area" data-tauri-drag-region>
     <div class="preview-card" data-tauri-drag-region>
-      <div class="preview-icon" data-tauri-drag-region><i class="fas fa-bell"></i></div>
-      <div class="preview-text" data-tauri-drag-region>
-        <div class="preview-title" data-tauri-drag-region>ここに通知が出ます</div>
-        <div class="preview-body" data-tauri-drag-region>位置が決まったら下の「決定」を押してください。Esc でキャンセル。</div>
-      </div>
+      <div class="preview-title" data-tauri-drag-region>📩 通知のプレビュー</div>
+      <div class="preview-body" data-tauri-drag-region>新しいメッセージが届いたら、この位置にこんな感じで表示されます。</div>
     </div>
   </div>
 
+  <div id="status">Esc=キャンセル / Enter=決定</div>
+
   <div class="picker-buttons">
-    <button id="cancelBtn">キャンセル</button>
-    <button id="saveBtn"><i class="fas fa-check mr-1"></i> この位置に決定</button>
+    <button id="cancelBtn" type="button">キャンセル</button>
+    <button id="saveBtn" type="button">✓ この位置に決定</button>
   </div>
 
   <script>
-    const { invoke } = window.__TAURI__.core;
+    (function () {
+      // 真っ白問題のデバッグ用: ロード状況をステータス欄に出す
+      const status = document.getElementById('status');
+      function log(s) { console.log('[Picker]', s); }
 
-    document.getElementById('saveBtn').addEventListener('click', async () => {
-      try {
-        await invoke('save_notification_position');
-      } catch (e) {
-        alert('保存失敗: ' + (e?.message || e));
+      function getInvoke() { return window.__TAURI__?.core?.invoke; }
+      function getCurrentWin() {
+        return window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
       }
-    });
 
-    document.getElementById('cancelBtn').addEventListener('click', () => {
-      invoke('cancel_position_picker').catch(console.error);
-    });
-
-    document.getElementById('closeXBtn').addEventListener('click', () => {
-      invoke('cancel_position_picker').catch(console.error);
-    });
-
-    // Esc キーでキャンセル
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        invoke('cancel_position_picker').catch(console.error);
-      } else if (e.key === 'Enter') {
-        invoke('save_notification_position').catch(console.error);
+      async function startDragFallback() {
+        // data-tauri-drag-region が動かない環境向けの JS フォールバック
+        try {
+          const w = getCurrentWin();
+          if (w && w.startDragging) {
+            await w.startDragging();
+            return true;
+          }
+        } catch (e) {
+          log('startDragging fallback failed: ' + e);
+        }
+        return false;
       }
-    });
+
+      async function save() {
+        const invoke = getInvoke();
+        if (!invoke) { alert('Tauri 未注入: 設定保存できません'); return; }
+        try {
+          await invoke('save_notification_position');
+        } catch (e) {
+          alert('保存失敗: ' + (e?.message || e));
+        }
+      }
+      async function cancel() {
+        const invoke = getInvoke();
+        if (!invoke) {
+          // 最後の手段: ウィンドウを直接閉じる
+          try { await getCurrentWin()?.close?.(); } catch (_) {}
+          return;
+        }
+        try {
+          await invoke('cancel_position_picker');
+        } catch (e) {
+          try { await getCurrentWin()?.close?.(); } catch (_) {}
+        }
+      }
+
+      // ボタンハンドラ
+      document.getElementById('saveBtn').addEventListener('click', save);
+      document.getElementById('cancelBtn').addEventListener('click', cancel);
+      document.getElementById('closeXBtn').addEventListener('click', cancel);
+
+      // キーボード
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        else if (e.key === 'Enter') { e.preventDefault(); save(); }
+      });
+
+      // ドラッグ: data-tauri-drag-region がメイン。万一動かない場合の JS フォールバック
+      document.addEventListener('mousedown', async (e) => {
+        if (e.button !== 0) return;
+        // ボタンや close-x はクリックさせる
+        if (e.target.closest('button')) return;
+        // data-tauri-drag-region が機能していれば Tauri が既にドラッグ開始済み
+        // していなくてもここでフォールバック起動
+        await startDragFallback();
+      });
+
+      // 状態確認
+      if (!window.__TAURI__) {
+        status.textContent = '⚠ Tauri 未注入 (window.__TAURI__ なし)';
+      } else if (!getInvoke()) {
+        status.textContent = '⚠ core.invoke なし';
+      } else {
+        status.textContent = 'Esc=キャンセル / Enter=決定';
+      }
+      log('Picker loaded. tauri=' + !!window.__TAURI__);
+    })();
   </script>
 </body>
 </html>
