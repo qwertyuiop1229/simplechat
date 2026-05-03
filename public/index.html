@@ -802,7 +802,97 @@
         transform: translateX(20px);
       }
 
-      /* === 通知位置設定（ドラッグ式） === */
+      /* === 通知位置設定（in-app オーバーレイ式） === */
+      #posPickerOverlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: none;
+      }
+      #posPickerOverlay.show { display: block; }
+      #posPickerBackdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 24, 39, 0.5);
+        backdrop-filter: blur(2px);
+      }
+      #posPickerHelp {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 18px 22px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        max-width: 360px;
+        text-align: center;
+      }
+      #posPickerHelp .pp-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 8px;
+      }
+      #posPickerHelp .pp-body {
+        font-size: 12px;
+        color: #6b7280;
+        line-height: 1.5;
+        margin-bottom: 14px;
+      }
+      #posPickerHelp .pp-buttons {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+      }
+      #posPickerHelp button {
+        padding: 8px 14px;
+        border: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      #posPickerCancel { background: #f3f4f6; color: #6b7280; }
+      #posPickerCancel:hover { background: #e5e7eb; }
+      #posPickerSave { background: #1f2937; color: #ffffff; }
+      #posPickerSave:hover { background: #111827; }
+
+      #posPickerPreview {
+        position: absolute;
+        width: 320px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-left: 3px solid #1f2937;
+        border-radius: 8px;
+        padding: 10px 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: move;
+        user-select: none;
+      }
+      #posPickerPreview.dragging {
+        opacity: 0.85;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      }
+      .pp-preview-icon {
+        width: 28px; height: 28px;
+        border-radius: 6px;
+        background: #f3f4f6;
+        color: #4b5563;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        flex-shrink: 0;
+        font-weight: 700;
+      }
+      .pp-preview-text { flex: 1; min-width: 0; }
+      .pp-preview-title { font-size: 12px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+      .pp-preview-body { font-size: 11px; color: #6b7280; }
+
       #updateErrorBox textarea {
         width: 100%;
         height: 80px;
@@ -922,6 +1012,29 @@
       class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden"
     >
       <div class="text-white text-xl">読み込み中...</div>
+    </div>
+
+    <!-- ===== 通知位置ピッカー（メインウィンドウ内オーバーレイ式） ===== -->
+    <div id="posPickerOverlay" class="hidden">
+      <div id="posPickerBackdrop"></div>
+      <div id="posPickerHelp">
+        <div class="pp-title">通知位置を設定</div>
+        <div class="pp-body">
+          下のサンプル通知をドラッグして好きな位置に置き、「✓ 決定」を押してください。<br>
+          別のモニターに置きたい場合は、まず SimpleChat ウィンドウを移動してから設定してください。
+        </div>
+        <div class="pp-buttons">
+          <button id="posPickerCancel" type="button">キャンセル</button>
+          <button id="posPickerSave" type="button">✓ この位置に決定</button>
+        </div>
+      </div>
+      <div id="posPickerPreview">
+        <div class="pp-preview-icon">✉</div>
+        <div class="pp-preview-text">
+          <div class="pp-preview-title">📩 通知のプレビュー</div>
+          <div class="pp-preview-body">ドラッグで移動できます</div>
+        </div>
+      </div>
     </div>
 
     <div class="container">
@@ -4001,6 +4114,113 @@
         if (!isTauri) pwaBanner.classList.add('show');
       }
       
+      // ===== 通知位置ピッカー（メインウィンドウ内ドラッグ式） =====
+      function startInAppPositionPicker() {
+        if (!isTauri || !window.__TAURI__?.core?.invoke) {
+          alert('この機能は Windows アプリ版でのみ使えます');
+          return;
+        }
+        const overlay = document.getElementById('posPickerOverlay');
+        const preview = document.getElementById('posPickerPreview');
+        const saveBtn = document.getElementById('posPickerSave');
+        const cancelBtn = document.getElementById('posPickerCancel');
+
+        // 設定モーダルを閉じる
+        const settingsModal = document.getElementById('settingsModal');
+        const wasSettingsOpen = !settingsModal.classList.contains('hidden');
+        settingsModal.classList.add('hidden');
+
+        // プレビューの初期位置（画面右下あたり）
+        const winW = window.innerWidth;
+        const winH = window.innerHeight;
+        preview.style.left = Math.max(20, winW - 360) + 'px';
+        preview.style.top = Math.max(20, winH - 100) + 'px';
+
+        overlay.classList.add('show');
+
+        // ドラッグ実装
+        let dragging = false;
+        let startMouseX = 0, startMouseY = 0;
+        let startLeft = 0, startTop = 0;
+
+        const onMouseDown = (e) => {
+          if (e.target.closest('#posPickerHelp')) return;
+          if (e.target !== preview && !preview.contains(e.target)) return;
+          dragging = true;
+          preview.classList.add('dragging');
+          startMouseX = e.clientX;
+          startMouseY = e.clientY;
+          startLeft = parseInt(preview.style.left, 10) || 0;
+          startTop = parseInt(preview.style.top, 10) || 0;
+          e.preventDefault();
+        };
+        const onMouseMove = (e) => {
+          if (!dragging) return;
+          const dx = e.clientX - startMouseX;
+          const dy = e.clientY - startMouseY;
+          let newLeft = startLeft + dx;
+          let newTop = startTop + dy;
+          // 画面内に制限
+          const previewW = preview.offsetWidth;
+          const previewH = preview.offsetHeight;
+          newLeft = Math.max(0, Math.min(window.innerWidth - previewW, newLeft));
+          newTop = Math.max(0, Math.min(window.innerHeight - previewH, newTop));
+          preview.style.left = newLeft + 'px';
+          preview.style.top = newTop + 'px';
+        };
+        const onMouseUp = () => {
+          if (!dragging) return;
+          dragging = false;
+          preview.classList.remove('dragging');
+        };
+
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+
+        const cleanup = () => {
+          document.removeEventListener('mousedown', onMouseDown);
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+          overlay.classList.remove('show');
+          if (wasSettingsOpen) settingsModal.classList.remove('hidden');
+          window.removeEventListener('keydown', onKeydown);
+        };
+
+        const doSave = async () => {
+          try {
+            // CSSピクセル → 物理ピクセル変換 + メインウィンドウ位置加算
+            const win = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+            const scaleFactor = await win.scaleFactor();
+            const winPos = await win.outerPosition();
+            const cssLeft = parseInt(preview.style.left, 10) || 0;
+            const cssTop = parseInt(preview.style.top, 10) || 0;
+            // インナー領域は outer から少しオフセットがあるが、概ね無視できる
+            const physicalX = Math.round(winPos.x + cssLeft * scaleFactor);
+            const physicalY = Math.round(winPos.y + cssTop * scaleFactor);
+            console.log('[PosPicker] save', { cssLeft, cssTop, scaleFactor, winPos, physicalX, physicalY });
+            await window.__TAURI__.core.invoke('save_position_absolute', {
+              x: physicalX,
+              y: physicalY
+            });
+            cleanup();
+            alertMessage && alertMessage('通知位置を保存しました', 'success');
+          } catch (e) {
+            console.error('[PosPicker] save error', e);
+            alert('保存失敗: ' + (e?.message || JSON.stringify(e)));
+          }
+        };
+
+        const onKeydown = (e) => {
+          if (e.key === 'Escape') { cleanup(); }
+          else if (e.key === 'Enter') { doSave(); }
+        };
+        window.addEventListener('keydown', onKeydown);
+
+        saveBtn.onclick = doSave;
+        cancelBtn.onclick = cleanup;
+      }
+
       function initSettings() {
         const toggleNotifSound = document.getElementById('toggleNotifSound');
         const toggleBrowserNotif = document.getElementById('toggleBrowserNotif');
@@ -4017,12 +4237,8 @@
           document.getElementById('shortcutInfoContainer').classList.remove('hidden');
           document.getElementById('browserNotifRow').classList.add('hidden');
           document.getElementById('notifPositionContainer').classList.remove('hidden');
-          document.getElementById('openPosPickerBtn').addEventListener('click', async () => {
-            try {
-              await window.__TAURI__.core.invoke('open_position_picker');
-            } catch(e) {
-              alert('位置設定を開けませんでした: ' + (e?.message || e));
-            }
+          document.getElementById('openPosPickerBtn').addEventListener('click', () => {
+            startInAppPositionPicker();
           });
           document.getElementById('testNotifBtn').addEventListener('click', () => {
             showNotification('テスト通知', 'これはテストメッセージです', '');

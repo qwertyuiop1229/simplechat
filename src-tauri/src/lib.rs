@@ -280,7 +280,22 @@ fn open_position_picker(
         y: initial_y,
     });
 
+    // F12 で開閉可能（devtools feature 有効）
     Ok(())
+}
+
+#[tauri::command]
+fn open_devtools_for_picker(app_handle: tauri::AppHandle) {
+    if let Some(win) = app_handle.get_webview_window(PICKER_LABEL) {
+        win.open_devtools();
+    }
+}
+
+#[tauri::command]
+fn open_devtools_for_container(app_handle: tauri::AppHandle) {
+    if let Some(win) = app_handle.get_webview_window(CONTAINER_LABEL) {
+        win.open_devtools();
+    }
 }
 
 #[tauri::command]
@@ -366,6 +381,77 @@ fn cancel_position_picker(app_handle: tauri::AppHandle) {
     if let Some(win) = app_handle.get_webview_window(PICKER_LABEL) {
         let _ = win.close();
     }
+}
+
+// メインウィンドウ内で完結する位置設定: 絶対物理ピクセル座標を受け取って保存
+#[tauri::command]
+fn save_position_absolute(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, NotificationState>,
+    x: i32,
+    y: i32,
+) -> Result<SavedPosition, String> {
+    log::info!("save_position_absolute called: x={}, y={}", x, y);
+
+    let main = app_handle
+        .get_webview_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    let monitors = main
+        .available_monitors()
+        .map_err(|e| format!("monitors failed: {}", e))?;
+
+    // 与えられた座標を含むモニターを判定
+    let found = monitors.iter().enumerate().find(|(_, m)| {
+        let mp = m.position();
+        let ms = m.size();
+        x >= mp.x && x < mp.x + ms.width as i32
+            && y >= mp.y && y < mp.y + ms.height as i32
+    });
+
+    let (monitor_idx, monitor) = match found {
+        Some((i, m)) => (Some(i), m.clone()),
+        None => {
+            // 座標がどのモニターにも含まれない場合は primary または 1 番目
+            let m = main.primary_monitor().ok().flatten()
+                .or_else(|| monitors.first().cloned())
+                .ok_or_else(|| "no monitors".to_string())?;
+            (Some(0), m)
+        }
+    };
+
+    let mp = monitor.position();
+    let ms = monitor.size();
+    let x_in_monitor = x - mp.x;
+    let y_in_monitor = y - mp.y;
+
+    let stack_direction = if y_in_monitor < (ms.height as i32) / 3 {
+        "down".to_string()
+    } else {
+        "up".to_string()
+    };
+
+    let saved = SavedPosition {
+        monitor_index: monitor_idx,
+        x_in_monitor,
+        y_in_monitor,
+        stack_direction,
+    };
+
+    {
+        let mut lock = state.saved_position.lock().unwrap();
+        *lock = Some(saved.clone());
+    }
+
+    log::info!("Saved position: {:?}", serde_json::to_string(&saved).ok());
+
+    // 既存コンテナがあれば即時再配置
+    if let Some(container) = app_handle.get_webview_window(CONTAINER_LABEL) {
+        if let Some((wx, wy, _)) = resolve_window_position(&app_handle, Some(&saved)) {
+            let _ = container.set_position(tauri::PhysicalPosition { x: wx, y: wy });
+        }
+    }
+
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -461,10 +547,13 @@ pub fn run() {
             open_position_picker,
             save_notification_position,
             cancel_position_picker,
+            save_position_absolute,
             set_saved_position,
             get_saved_position,
             get_available_monitors,
             update_shortcut_key,
+            open_devtools_for_picker,
+            open_devtools_for_container,
         ])
         .setup(|app| {
             let _handle = app.handle().clone();
@@ -541,6 +630,16 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                ])
+                .level(log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
