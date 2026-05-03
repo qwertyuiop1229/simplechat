@@ -802,43 +802,33 @@
         transform: translateX(20px);
       }
 
-      /* === 通知位置ピッカー === */
-      .monitor-rect {
-        position: absolute;
-        background: #1f2937;
-        border: 2px solid #4b5563;
+      /* === 通知位置設定（ドラッグ式） === */
+      #updateErrorBox textarea {
+        width: 100%;
+        height: 80px;
+        padding: 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace;
+        font-size: 0.7rem;
+        background: #1e293b;
+        color: #fca5a5;
+        border: 1px solid #475569;
         border-radius: 6px;
-        cursor: default;
-        box-sizing: border-box;
+        resize: vertical;
+        margin-bottom: 8px;
+        white-space: pre;
+        overflow: auto;
       }
-      .monitor-rect.is-primary { border-color: #3b82f6; }
-      .monitor-rect-label {
-        position: absolute;
-        top: 4px; left: 6px;
-        font-size: 10px;
-        color: #9ca3af;
-        font-weight: 700;
-        pointer-events: none;
-      }
-      .position-dot {
-        position: absolute;
-        width: 12px;
-        height: 12px;
-        background: rgba(255,255,255,0.35);
-        border-radius: 50%;
+      #updateErrorBox button {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        background: rgba(255,255,255,0.1);
+        color: #f1f5f9;
+        border: 1px solid #475569;
+        border-radius: 6px;
         cursor: pointer;
-        transform: translate(-50%, -50%);
-        transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+        transition: background 0.15s;
       }
-      .position-dot:hover {
-        background: rgba(255,255,255,0.7);
-        transform: translate(-50%,-50%) scale(1.25);
-      }
-      .position-dot.selected {
-        background: #3b82f6;
-        transform: translate(-50%,-50%) scale(1.4);
-        box-shadow: 0 0 8px rgba(59,130,246,0.6);
-      }
+      #updateErrorBox button:hover { background: rgba(255,255,255,0.2); }
 
       /* === PWAインストールバナー === */
       #pwaInstallBanner {
@@ -909,6 +899,10 @@
         <div class="update-progress" id="updateProgress">
           <span class="update-spinner"></span>
           <span id="updateProgressText">ダウンロード中...</span>
+        </div>
+        <div id="updateErrorBox" class="hidden" style="margin-top:1rem;text-align:left">
+          <textarea id="updateErrorDetail" readonly></textarea>
+          <button id="copyErrorBtn">エラーをコピー</button>
         </div>
       </div>
     </div>
@@ -1123,9 +1117,11 @@
                     <div id="notifPositionContainer" class="hidden">
                         <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">通知の位置</h3>
                         <div class="bg-gray-50 rounded-2xl p-4 space-y-3">
-                            <p class="text-xs text-gray-600">ディスプレイ上の位置をクリックして選択</p>
-                            <div id="monitorPicker" class="flex justify-center"></div>
-                            <button id="testNotifBtn" class="w-full mt-2 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-bold text-gray-700 transition-colors">
+                            <p class="text-xs text-gray-600">通知のプレビューをドラッグして好きな位置に配置できます</p>
+                            <button id="openPosPickerBtn" class="w-full py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm font-bold transition-colors">
+                                <i class="fas fa-arrows-alt mr-1"></i> 通知位置を設定
+                            </button>
+                            <button id="testNotifBtn" class="w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-bold text-gray-700 transition-colors">
                                 <i class="fas fa-bell mr-1"></i> テスト通知を表示
                             </button>
                         </div>
@@ -1580,12 +1576,7 @@
       let messaging;
       let currentFcmToken = null;
       const roomNames = {};
-      let availableMonitors = [];
-      let notifMonitorIndex = (() => {
-        const v = localStorage.getItem('simplechat_notif_monitor');
-        return v === null ? null : parseInt(v, 10);
-      })();
-      let notifPosition = localStorage.getItem('simplechat_notif_position') || 'bottom-right';
+      // 通知位置はすべて Rust 側 saved_position で管理（localStorage は使わない）
       let userId = null;
       let userNickname = null;
       let isAdmin = false;
@@ -3771,16 +3762,14 @@
         if (isTauri) {
           if (window.__TAURI__?.core?.invoke) {
             try {
-              await window.__TAURI__.core.invoke('show_notification_window', {
+              await window.__TAURI__.core.invoke('enqueue_notification', {
                 title: title,
                 body: body,
-                roomId: roomId || "",
-                monitorIndex: notifMonitorIndex,
-                position: notifPosition
+                roomId: roomId || ""
               });
             } catch(e) {
-              console.error("Failed to show notification window", e);
-              alert("通知ウィンドウの表示に失敗しました:\n" + (e?.message || e));
+              console.error("Failed to enqueue notification", e);
+              alert("通知の表示に失敗しました:\n" + (e?.message || e));
             }
           }
         } else if ('Notification' in window) {
@@ -3814,8 +3803,9 @@
           if (metadata) {
             console.log('Update available:', metadata.version);
 
-            // Tauri v2 plugin-updater (v2.10+) は download → install の2段階。
-            // パラメーター名は rid ではなく updateRid (Rust 側 update_rid の camelCase)。
+            // Tauri v2 plugin-updater: パラメーター名は updateRid。
+            // バージョンによって download_and_install 単発 or download+install 2段階。
+            // 互換性のため両方を順に試す。
             const Channel = window.__TAURI__?.core?.Channel;
             const rid = metadata.rid;
             pendingUpdate = {
@@ -3823,17 +3813,40 @@
               version: metadata.version,
               body: metadata.body,
               downloadAndInstall: async () => {
-                console.log('[Updater] Starting download, updateRid:', rid);
-                const downloadArgs = { updateRid: rid };
-                if (Channel) {
-                  const channel = new Channel();
-                  channel.onmessage = (msg) => console.log('[Updater] event:', msg);
-                  downloadArgs.onEvent = channel;
+                console.log('[Updater] Starting, updateRid:', rid);
+                const makeChannel = () => {
+                  if (!Channel) return null;
+                  const ch = new Channel();
+                  ch.onmessage = (msg) => console.log('[Updater event]', msg);
+                  return ch;
+                };
+                // 1) まず download_and_install 単発を試す
+                try {
+                  const ch = makeChannel();
+                  const args = { updateRid: rid };
+                  if (ch) args.onEvent = ch;
+                  await invoke('plugin:updater|download_and_install', args);
+                  console.log('[Updater] download_and_install OK');
+                  return;
+                } catch (e1) {
+                  console.warn('[Updater] download_and_install failed, trying download+install', e1);
+                  // 2) フォールバック: download → install 2段階
+                  try {
+                    const ch = makeChannel();
+                    const dArgs = { updateRid: rid };
+                    if (ch) dArgs.onEvent = ch;
+                    await invoke('plugin:updater|download', dArgs);
+                    console.log('[Updater] download OK, installing');
+                  } catch (e2) {
+                    throw new Error('download failed: ' + (e2?.message || JSON.stringify(e2)));
+                  }
+                  try {
+                    await invoke('plugin:updater|install', { updateRid: rid });
+                    console.log('[Updater] install OK');
+                  } catch (e3) {
+                    throw new Error('install failed: ' + (e3?.message || JSON.stringify(e3)));
+                  }
                 }
-                await invoke('plugin:updater|download', downloadArgs);
-                console.log('[Updater] Download complete, installing...');
-                await invoke('plugin:updater|install', { updateRid: rid });
-                console.log('[Updater] Install complete');
               }
             };
 
@@ -3879,12 +3892,38 @@
           }, 2000);
         } catch (error) {
           console.error('Update failed:', error);
-          const detail = error instanceof Error ? error.message : (typeof error === 'object' ? JSON.stringify(error) : String(error));
-          progressText.textContent = 'アップデート失敗: ' + detail.substring(0, 200);
+          const detail = error instanceof Error
+            ? (error.message + (error.stack ? '\n\n' + error.stack : ''))
+            : (typeof error === 'object' ? JSON.stringify(error, null, 2) : String(error));
+          progressText.textContent = 'アップデート失敗（詳細は下のエラー欄を確認）';
+          // エラー詳細欄に展開
+          const errBox = document.getElementById('updateErrorBox');
+          const errArea = document.getElementById('updateErrorDetail');
+          if (errBox && errArea) {
+            errArea.value = detail;
+            errBox.classList.remove('hidden');
+          }
           btn.disabled = false;
           btn.innerHTML = '<i class="fas fa-download"></i>&nbsp;&nbsp;もう一度試す';
         }
       };
+      // エラーコピー
+      document.addEventListener('click', (e) => {
+        if (e.target?.id === 'copyErrorBtn') {
+          const ta = document.getElementById('updateErrorDetail');
+          if (ta) {
+            ta.select();
+            try {
+              navigator.clipboard.writeText(ta.value).then(() => {
+                e.target.textContent = 'コピーしました ✓';
+                setTimeout(() => { e.target.textContent = 'エラーをコピー'; }, 1500);
+              });
+            } catch(_) {
+              document.execCommand('copy');
+            }
+          }
+        }
+      });
 
       // =========================================================================
       // PWA & Settings Management
@@ -3948,7 +3987,13 @@
           document.getElementById('shortcutInfoContainer').classList.remove('hidden');
           document.getElementById('browserNotifRow').classList.add('hidden');
           document.getElementById('notifPositionContainer').classList.remove('hidden');
-          loadAndRenderMonitorPicker();
+          document.getElementById('openPosPickerBtn').addEventListener('click', async () => {
+            try {
+              await window.__TAURI__.core.invoke('open_position_picker');
+            } catch(e) {
+              alert('位置設定を開けませんでした: ' + (e?.message || e));
+            }
+          });
           document.getElementById('testNotifBtn').addEventListener('click', () => {
             showNotification('テスト通知', 'これはテストメッセージです', '');
           });
@@ -4015,83 +4060,6 @@
       }
 
 
-      // === 通知位置ピッカー ===
-      async function loadAndRenderMonitorPicker() {
-        if (!isTauri || !window.__TAURI__?.core?.invoke) return;
-        try {
-          availableMonitors = await window.__TAURI__.core.invoke('get_available_monitors');
-        } catch(e) {
-          console.error('Failed to get monitors:', e);
-          return;
-        }
-        if (!availableMonitors.length) return;
-
-        // 全モニターのバウンディングボックスを計算してスケール決定
-        const minX = Math.min(...availableMonitors.map(m => m.x));
-        const minY = Math.min(...availableMonitors.map(m => m.y));
-        const maxX = Math.max(...availableMonitors.map(m => m.x + m.width));
-        const maxY = Math.max(...availableMonitors.map(m => m.y + m.height));
-        const totalW = maxX - minX, totalH = maxY - minY;
-        const targetW = 280;
-        const targetH = 160;
-        const scale = Math.min(targetW / totalW, targetH / totalH);
-
-        const picker = document.getElementById('monitorPicker');
-        picker.innerHTML = '';
-
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'relative';
-        wrapper.style.width = (totalW * scale) + 'px';
-        wrapper.style.height = (totalH * scale) + 'px';
-
-        // 初期選択モニターを決定（保存値が範囲外/未設定なら primary）
-        if (notifMonitorIndex === null || notifMonitorIndex >= availableMonitors.length) {
-          const primary = availableMonitors.findIndex(m => m.is_primary);
-          notifMonitorIndex = primary >= 0 ? primary : 0;
-        }
-
-        availableMonitors.forEach((mon, idx) => {
-          const rect = document.createElement('div');
-          rect.className = 'monitor-rect' + (mon.is_primary ? ' is-primary' : '');
-          rect.style.left = ((mon.x - minX) * scale) + 'px';
-          rect.style.top = ((mon.y - minY) * scale) + 'px';
-          rect.style.width = (mon.width * scale) + 'px';
-          rect.style.height = (mon.height * scale) + 'px';
-
-          const label = document.createElement('div');
-          label.className = 'monitor-rect-label';
-          label.textContent = (idx + 1) + (mon.is_primary ? ' (主)' : '');
-          rect.appendChild(label);
-
-          const positions = [
-            ['top-left', 12, 18], ['top-center', 50, 18], ['top-right', 88, 18],
-            ['middle-left', 12, 50], ['middle-center', 50, 50], ['middle-right', 88, 50],
-            ['bottom-left', 12, 82], ['bottom-center', 50, 82], ['bottom-right', 88, 82],
-          ];
-          positions.forEach(([key, xp, yp]) => {
-            const dot = document.createElement('div');
-            dot.className = 'position-dot';
-            dot.style.left = xp + '%';
-            dot.style.top = yp + '%';
-            if (idx === notifMonitorIndex && key === notifPosition) {
-              dot.classList.add('selected');
-            }
-            dot.title = key;
-            dot.addEventListener('click', (e) => {
-              e.stopPropagation();
-              notifMonitorIndex = idx;
-              notifPosition = key;
-              localStorage.setItem('simplechat_notif_monitor', String(idx));
-              localStorage.setItem('simplechat_notif_position', key);
-              wrapper.querySelectorAll('.position-dot.selected').forEach(d => d.classList.remove('selected'));
-              dot.classList.add('selected');
-            });
-            rect.appendChild(dot);
-          });
-          wrapper.appendChild(rect);
-        });
-        picker.appendChild(wrapper);
-      }
 
       // =========================================================================
       // Application Startup

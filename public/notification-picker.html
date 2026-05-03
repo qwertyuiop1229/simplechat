@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通知位置を設定</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%;
+      background: #ffffff;
+      border: 2px dashed #1f2937;
+      border-radius: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #dragHandle {
+      cursor: move;
+      background: #1f2937;
+      color: #ffffff;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      letter-spacing: 0.02em;
+    }
+    #dragHandle i {
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+
+    .preview-card {
+      margin: 10px 12px;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-left: 3px solid #1f2937;
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .preview-icon {
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      background: #f3f4f6;
+      color: #4b5563;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .preview-text { flex: 1; min-width: 0; }
+    .preview-title { font-size: 0.82rem; font-weight: 600; color: #111827; margin-bottom: 2px; }
+    .preview-body { font-size: 0.74rem; color: #6b7280; }
+
+    .picker-buttons {
+      display: flex;
+      gap: 8px;
+      padding: 0 12px 12px;
+      margin-top: auto;
+    }
+    .picker-buttons button {
+      flex: 1;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    #cancelBtn {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    #cancelBtn:hover { background: #e5e7eb; color: #374151; }
+    #saveBtn {
+      background: #1f2937;
+      color: #ffffff;
+    }
+    #saveBtn:hover { background: #111827; }
+
+    .hint {
+      font-size: 0.68rem;
+      color: #9ca3af;
+      text-align: center;
+      padding: 0 12px 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="dragHandle">
+    <i class="fas fa-arrows-alt"></i>
+    <span>ドラッグして位置を決定</span>
+  </div>
+
+  <div class="preview-card">
+    <div class="preview-icon"><i class="fas fa-bell"></i></div>
+    <div class="preview-text">
+      <div class="preview-title">通知のサンプル</div>
+      <div class="preview-body">この位置に通知が表示されます</div>
+    </div>
+  </div>
+
+  <div class="hint">この位置からスタックします</div>
+
+  <div class="picker-buttons">
+    <button id="cancelBtn">キャンセル</button>
+    <button id="saveBtn">この位置に決定</button>
+  </div>
+
+  <script>
+    const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
+    const { invoke } = window.__TAURI__.core;
+    const appWindow = getCurrentWebviewWindow();
+
+    // ドラッグ可能領域でマウスダウン → OS にドラッグ処理を委譲
+    document.getElementById('dragHandle').addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        appWindow.startDragging().catch(console.error);
+      }
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      try {
+        await invoke('save_notification_position');
+      } catch (e) {
+        alert('保存失敗: ' + (e?.message || e));
+      }
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      invoke('cancel_position_picker').catch(console.error);
+    });
+  </script>
+</body>
+</html>
