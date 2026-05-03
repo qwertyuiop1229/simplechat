@@ -164,6 +164,9 @@ fn show_notification_window(
 
     let monitor_rect = get_monitor_rect(&app_handle, monitor_index);
 
+    // 注: transparent(true) は Tauri v2 + WebView2 の一部 Windows 環境で
+    // ウィンドウが完全に不可視になるバグがあるため使わない。
+    // 角丸・シャドウは諦めるが、確実に表示されることを優先。
     let notification_window = WebviewWindowBuilder::new(
         &app_handle,
         &label,
@@ -172,7 +175,6 @@ fn show_notification_window(
     .inner_size(NOTIF_W as f64, NOTIF_H as f64)
     .always_on_top(true)
     .decorations(false)
-    .transparent(true)
     .skip_taskbar(true)
     .resizable(false)
     .visible(false)

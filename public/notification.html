@@ -9,17 +9,19 @@
     body {
       margin: 0;
       padding: 0;
-      background: transparent;
+      /* transparent(true) を Rust 側で外したため、body に明示的な背景色を置く */
+      background: #ffffff;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      /* 細いボーダーで枠を視認可能に（角丸の代わり） */
+      border: 1px solid #e5e7eb;
+      box-sizing: border-box;
     }
     .custom-notif {
       width: 100%;
       height: 100%;
       box-sizing: border-box;
       background: white;
-      border-radius: 14px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
       padding: 16px 18px;
       display: flex;
       align-items: flex-start;
