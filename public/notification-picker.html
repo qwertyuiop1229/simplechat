@@ -21,26 +21,35 @@
       flex-direction: column;
     }
 
-    #dragHandle {
+    /* ドラッグ可能ヘッダー — Tauri が自動でハンドル */
+    .drag-handle {
       cursor: move;
-      background: #1f2937;
+      background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
       color: #ffffff;
-      padding: 8px 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
+      padding: 9px 12px;
+      font-size: 0.74rem;
+      font-weight: 700;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 8px;
       flex-shrink: 0;
       letter-spacing: 0.02em;
     }
-    #dragHandle i {
-      font-size: 0.85rem;
-      color: #9ca3af;
+    .drag-handle .left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    .drag-handle .left i { font-size: 0.85rem; color: #9ca3af; }
 
+    /* プレビュー本体 */
+    .preview-area {
+      cursor: move;        /* ドラッグ可能を視覚的に */
+      padding: 10px 12px;
+      flex: 1;
+    }
     .preview-card {
-      margin: 10px 12px;
       background: #ffffff;
       border: 1px solid #e5e7eb;
       border-left: 3px solid #1f2937;
@@ -64,21 +73,21 @@
     }
     .preview-text { flex: 1; min-width: 0; }
     .preview-title { font-size: 0.82rem; font-weight: 600; color: #111827; margin-bottom: 2px; }
-    .preview-body { font-size: 0.74rem; color: #6b7280; }
+    .preview-body { font-size: 0.74rem; color: #6b7280; line-height: 1.4; }
 
     .picker-buttons {
       display: flex;
       gap: 8px;
-      padding: 0 12px 12px;
-      margin-top: auto;
+      padding: 8px 12px 12px;
+      flex-shrink: 0;
     }
     .picker-buttons button {
       flex: 1;
-      padding: 8px 10px;
+      padding: 9px 10px;
       border: none;
       border-radius: 6px;
       font-size: 0.78rem;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
       transition: background-color 0.15s, color 0.15s;
     }
@@ -93,46 +102,50 @@
     }
     #saveBtn:hover { background: #111827; }
 
-    .hint {
-      font-size: 0.68rem;
+    .close-x {
+      background: none;
+      border: none;
       color: #9ca3af;
-      text-align: center;
-      padding: 0 12px 4px;
+      width: 22px; height: 22px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
     }
+    .close-x:hover { color: #ffffff; background: rgba(255,255,255,0.1); }
   </style>
 </head>
 <body>
-  <div id="dragHandle">
-    <i class="fas fa-arrows-alt"></i>
-    <span>ドラッグして位置を決定</span>
+  <!-- ドラッグハンドル: data-tauri-drag-region により Tauri が自動で OS ドラッグ起動 -->
+  <div class="drag-handle" data-tauri-drag-region>
+    <div class="left" data-tauri-drag-region>
+      <i class="fas fa-arrows-alt" data-tauri-drag-region></i>
+      <span data-tauri-drag-region>ここをドラッグして移動</span>
+    </div>
+    <button class="close-x" id="closeXBtn" title="キャンセル"><i class="fas fa-times"></i></button>
   </div>
 
-  <div class="preview-card">
-    <div class="preview-icon"><i class="fas fa-bell"></i></div>
-    <div class="preview-text">
-      <div class="preview-title">通知のサンプル</div>
-      <div class="preview-body">この位置に通知が表示されます</div>
+  <!-- プレビュー領域も丸ごとドラッグ可能 -->
+  <div class="preview-area" data-tauri-drag-region>
+    <div class="preview-card" data-tauri-drag-region>
+      <div class="preview-icon" data-tauri-drag-region><i class="fas fa-bell"></i></div>
+      <div class="preview-text" data-tauri-drag-region>
+        <div class="preview-title" data-tauri-drag-region>ここに通知が出ます</div>
+        <div class="preview-body" data-tauri-drag-region>位置が決まったら下の「決定」を押してください。Esc でキャンセル。</div>
+      </div>
     </div>
   </div>
 
-  <div class="hint">この位置からスタックします</div>
-
   <div class="picker-buttons">
     <button id="cancelBtn">キャンセル</button>
-    <button id="saveBtn">この位置に決定</button>
+    <button id="saveBtn"><i class="fas fa-check mr-1"></i> この位置に決定</button>
   </div>
 
   <script>
-    const { getCurrentWebviewWindow } = window.__TAURI__.webviewWindow;
     const { invoke } = window.__TAURI__.core;
-    const appWindow = getCurrentWebviewWindow();
-
-    // ドラッグ可能領域でマウスダウン → OS にドラッグ処理を委譲
-    document.getElementById('dragHandle').addEventListener('mousedown', (e) => {
-      if (e.button === 0) {
-        appWindow.startDragging().catch(console.error);
-      }
-    });
 
     document.getElementById('saveBtn').addEventListener('click', async () => {
       try {
@@ -144,6 +157,19 @@
 
     document.getElementById('cancelBtn').addEventListener('click', () => {
       invoke('cancel_position_picker').catch(console.error);
+    });
+
+    document.getElementById('closeXBtn').addEventListener('click', () => {
+      invoke('cancel_position_picker').catch(console.error);
+    });
+
+    // Esc キーでキャンセル
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        invoke('cancel_position_picker').catch(console.error);
+      } else if (e.key === 'Enter') {
+        invoke('save_notification_position').catch(console.error);
+      }
     });
   </script>
 </body>

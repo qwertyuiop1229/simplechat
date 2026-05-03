@@ -5,9 +5,12 @@ use std::sync::Mutex;
 const CONTAINER_LABEL: &str = "notif_container";
 const PICKER_LABEL: &str = "notif_pos_picker";
 
-const CONTAINER_W: i32 = 400;
-const CONTAINER_H_DEFAULT: i32 = 600;
-const PICKER_W: i32 = 380;
+const CONTAINER_W: i32 = 360;
+const CONTAINER_H_INITIAL: i32 = 100;       // 初期は1枚分の高さだけ
+const CONTAINER_H_DEFAULT: i32 = 600;       // 「右下」デフォルト計算用の見込み高さ
+const CONTAINER_H_MIN: i32 = 90;            // カードなしのとき
+const CONTAINER_H_MAX_RATIO: f64 = 0.85;    // モニター高さの比率上限
+const PICKER_W: i32 = 360;
 const PICKER_H: i32 = 200;
 const SCREEN_MARGIN: i32 = 20;
 const OFFSCREEN_X: i32 = -32000;
@@ -100,30 +103,79 @@ fn ensure_container_window(
         return Ok((win, false));
     }
 
-    // モニター高さに合わせたコンテナ高さを計算
-    let monitor = pick_monitor(app_handle, None);
-    let container_h = monitor
-        .as_ref()
-        .map(container_height_for_monitor)
-        .unwrap_or(CONTAINER_H_DEFAULT);
-
+    // 初期サイズは小さめ。カード追加時に JS から resize_notif_container を呼んで動的に伸びる
     let win = WebviewWindowBuilder::new(
         app_handle,
         CONTAINER_LABEL,
         tauri::WebviewUrl::App("/notification-container.html".into()),
     )
-    .inner_size(CONTAINER_W as f64, container_h as f64)
-    .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64) // 初期は画面外
+    // resizable は内部で set_size するため true（Windows でリサイズ制限がかからないように）
+    .inner_size(CONTAINER_W as f64, CONTAINER_H_INITIAL as f64)
+    .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64)
     .always_on_top(true)
     .decorations(false)
     .skip_taskbar(true)
-    .resizable(false)
+    .resizable(true)
     .focused(false)
-    // visible(true) デフォルト。show() バグ回避のため visible(false) は使わない
     .build()
     .map_err(|e| format!("container build failed: {}", e))?;
 
     Ok((win, true))
+}
+
+// JS から呼ばれるコンテナリサイズ。
+// stack_direction によってアンカー（top or bottom）を維持する
+#[tauri::command]
+fn resize_notif_container(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, NotificationState>,
+    height: u32,
+) -> Result<(), String> {
+    let win = app_handle
+        .get_webview_window(CONTAINER_LABEL)
+        .ok_or_else(|| "container not found".to_string())?;
+
+    // モニターから最大高を計算
+    let monitor = pick_monitor(&app_handle, None);
+    let max_h = monitor
+        .as_ref()
+        .map(|m| (m.size().height as f64 * CONTAINER_H_MAX_RATIO) as i32)
+        .unwrap_or(CONTAINER_H_DEFAULT);
+    let new_h = height.max(CONTAINER_H_MIN as u32).min(max_h as u32);
+
+    let saved = state.saved_position.lock().unwrap().clone();
+    let stack_dir = saved
+        .as_ref()
+        .map(|s| s.stack_direction.clone())
+        .unwrap_or_else(|| "up".to_string());
+
+    let cur_pos = win.outer_position().map_err(|e| e.to_string())?;
+    let cur_size = win.outer_size().map_err(|e| e.to_string())?;
+
+    if stack_dir == "up" {
+        // 「up」(下から積む): bottom anchor を維持。top を新しい高さに合わせて上下調整
+        let bottom = cur_pos.y + cur_size.height as i32;
+        let new_top = bottom - new_h as i32;
+        win.set_size(tauri::PhysicalSize {
+            width: cur_size.width,
+            height: new_h,
+        })
+        .map_err(|e| format!("set_size failed: {}", e))?;
+        win.set_position(tauri::PhysicalPosition {
+            x: cur_pos.x,
+            y: new_top,
+        })
+        .map_err(|e| format!("set_position failed: {}", e))?;
+    } else {
+        // 「down」(上から積む): top anchor 維持。サイズだけ変える
+        win.set_size(tauri::PhysicalSize {
+            width: cur_size.width,
+            height: new_h,
+        })
+        .map_err(|e| format!("set_size failed: {}", e))?;
+    }
+
+    Ok(())
 }
 
 // ===========================================================================
@@ -404,6 +456,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             enqueue_notification,
             hide_notif_container,
+            resize_notif_container,
             close_notification,
             open_position_picker,
             save_notification_position,

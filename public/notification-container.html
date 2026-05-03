@@ -134,6 +134,13 @@
       list.style.flexDirection = dir === 'up' ? 'column-reverse' : 'column';
     }
 
+    // コンテンツ高さに応じてコンテナをリサイズ
+    function syncContainerHeight() {
+      // padding 含めた実際の必要高さ
+      const targetH = Math.ceil(list.scrollHeight + 4);
+      invoke('resize_notif_container', { height: Math.max(80, targetH) }).catch(() => {});
+    }
+
     function dismiss(card) {
       if (card.classList.contains('dismissing')) return;
       card.classList.add('dismissing');
@@ -141,6 +148,8 @@
         card.remove();
         if (list.children.length === 0) {
           invoke('hide_notif_container').catch(() => {});
+        } else {
+          syncContainerHeight();
         }
       }, 460);
     }
@@ -190,12 +199,15 @@
         list.appendChild(card);
       }
 
-      // 新着スクロール: down 方向なら下までスクロール
-      if (stackDirection === 'down') {
-        list.scrollTop = list.scrollHeight;
-      } else {
-        list.scrollTop = 0;
-      }
+      // 追加直後にコンテナリサイズ（アニメーション完了を待つために少し遅延）
+      requestAnimationFrame(() => {
+        syncContainerHeight();
+        if (stackDirection === 'down') {
+          list.scrollTop = list.scrollHeight;
+        } else {
+          list.scrollTop = 0;
+        }
+      });
 
       // 5秒後フェードアウト
       setTimeout(() => dismiss(card), 5000);
