@@ -2,6 +2,40 @@ use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent,
 use tauri::WebviewWindowBuilder;
 use std::sync::Mutex;
 
+// HTML を実行ファイルに埋め込む（バンドル不在時のフォールバック）
+const CONTAINER_HTML: &str = include_str!("../../public/notification-container.html");
+
+// ファイルが正常ロードされなかった場合に init_script で強制注入するための JS を作る
+fn build_container_init_script() -> String {
+    let html = CONTAINER_HTML
+        .replace('\\', "\\\\")
+        .replace('`', "\\`")
+        .replace("${", "\\${")
+        .replace("</script>", "<\\/script>");
+    format!(
+        r#"(function() {{
+  var html = `{}`;
+  function inject() {{
+    if (document.getElementById('notifList')) {{ return; }}
+    try {{
+      document.open();
+      document.write(html);
+      document.close();
+    }} catch(e) {{
+      console.error('[init_script] inject failed:', e);
+      try {{ document.body.innerHTML = '<pre style="color:red;padding:10px">init failed: ' + (e && e.message) + '</pre>'; }} catch(_){{}}
+    }}
+  }}
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {{
+    setTimeout(inject, 50);
+  }} else {{
+    document.addEventListener('DOMContentLoaded', function() {{ setTimeout(inject, 50); }});
+  }}
+}})();"#,
+        html
+    )
+}
+
 const CONTAINER_LABEL: &str = "notif_container";
 const PICKER_LABEL: &str = "notif_pos_picker";
 
@@ -115,12 +149,13 @@ fn ensure_container_window(
     }
 
     // 初期サイズは小さめ。カード追加時に JS から resize_notif_container を呼んで動的に伸びる
+    // バンドルから読まれなかった場合に備えて init_script で HTML を強制注入
+    let init_script = build_container_init_script();
     let win = WebviewWindowBuilder::new(
         app_handle,
         CONTAINER_LABEL,
         tauri::WebviewUrl::App("/notification-container.html".into()),
     )
-    // resizable は内部で set_size するため true（Windows でリサイズ制限がかからないように）
     .inner_size(CONTAINER_W as f64, CONTAINER_H_INITIAL as f64)
     .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64)
     .always_on_top(true)
@@ -128,8 +163,15 @@ fn ensure_container_window(
     .skip_taskbar(true)
     .resizable(true)
     .focused(false)
+    .initialization_script(&init_script)
     .build()
     .map_err(|e| format!("container build failed: {}", e))?;
+
+    log::info!("Container window created");
+
+    // 診断のため devtools を自動オープン（問題切り分け用）
+    // 落ち着いたら削除する
+    win.open_devtools();
 
     Ok((win, true))
 }
@@ -363,6 +405,17 @@ fn open_log_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
         .path()
         .app_log_dir()
         .map_err(|e| format!("app_log_dir failed: {}", e))?;
+    // ディレクトリがまだ作られていなければ作る
+    if !path.exists() {
+        std::fs::create_dir_all(&path).map_err(|e| format!("create_dir_all failed: {}", e))?;
+    }
+    // ログファイルが空でも何か書いておく
+    let log_marker = path.join("opened_at.txt");
+    let _ = std::fs::write(
+        &log_marker,
+        format!("Log dir opened: {:?}\n", std::time::SystemTime::now()),
+    );
+
     let path_str = path.to_string_lossy().to_string();
     log::info!("Opening log dir: {}", path_str);
     // explorer で開く
