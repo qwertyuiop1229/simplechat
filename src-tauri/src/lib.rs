@@ -2,12 +2,12 @@ use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent,
 use tauri::WebviewWindowBuilder;
 use std::sync::Mutex;
 
-// HTML を実行ファイルに埋め込む（バンドル不在時のフォールバック）
+// HTML を実行ファイルに埋め込む（バンドル不在時のフォールバック用、現在は未使用）
+#[allow(dead_code)]
 const CONTAINER_HTML: &str = include_str!("../../public/notification-container.html");
 
-// ファイルが正常ロードされなかった場合に init_script で強制注入するための JS を作る。
-// HTML 内に JS の template literal (${...}) があるため、URL エンコードして
-// JS 側で decodeURIComponent するアプローチを取る。
+// 重い HTML 埋め込み版（現在は build を遅延させるリスクがあるため使わない）
+#[allow(dead_code)]
 fn build_container_init_script() -> String {
     let html_encoded: String = urlencoding::encode(CONTAINER_HTML).into_owned();
     format!(
@@ -53,8 +53,8 @@ const CONTAINER_H_MAX_RATIO: f64 = 0.85;    // モニター高さの比率上限
 const PICKER_W: i32 = 360;
 const PICKER_H: i32 = 200;
 const SCREEN_MARGIN: i32 = 20;
-const OFFSCREEN_X: i32 = -32000;
-const OFFSCREEN_Y: i32 = -32000;
+const OFFSCREEN_X: i32 = -8000;
+const OFFSCREEN_Y: i32 = -8000;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct SavedPosition {
@@ -150,13 +150,19 @@ fn resolve_window_position(
 fn ensure_container_window(
     app_handle: &tauri::AppHandle,
 ) -> Result<(tauri::WebviewWindow, bool), String> {
+    log::info!("[ensure] step 1: checking existing container");
     if let Some(win) = app_handle.get_webview_window(CONTAINER_LABEL) {
+        log::info!("[ensure] step 1.5: existing container found, reusing");
         return Ok((win, false));
     }
+    log::info!("[ensure] step 2: no existing, will create new");
 
-    // 初期サイズは小さめ。カード追加時に JS から resize_notif_container を呼んで動的に伸びる
-    // バンドルから読まれなかった場合に備えて init_script で HTML を強制注入
-    let init_script = build_container_init_script();
+    // ファイル URL が信頼できなくなった場合に備えて HTML 埋め込みフォールバックを準備
+    // 大きな init_script は build を遅延させるので最小限のフォールバックだけにする
+    let init_script = build_container_init_script_minimal();
+    log::info!("[ensure] step 3: init_script size = {} bytes", init_script.len());
+
+    log::info!("[ensure] step 4: starting WebviewWindowBuilder::build()");
     let win = WebviewWindowBuilder::new(
         app_handle,
         CONTAINER_LABEL,
@@ -171,15 +177,48 @@ fn ensure_container_window(
     .focused(false)
     .initialization_script(&init_script)
     .build()
-    .map_err(|e| format!("container build failed: {}", e))?;
+    .map_err(|e| {
+        log::error!("[ensure] BUILD FAILED: {}", e);
+        format!("container build failed: {}", e)
+    })?;
+    log::info!("[ensure] step 5: WebviewWindowBuilder::build() returned successfully");
 
-    log::info!("Container window created");
+    // open_devtools() は呼ばない: 過去にハングする報告あり。
+    // 必要なら F12 で手動オープン（devtools feature 有効）
 
-    // 診断のため devtools を自動オープン（問題切り分け用）
-    // 落ち着いたら削除する
-    win.open_devtools();
-
+    log::info!("[ensure] step 6: container window setup complete");
     Ok((win, true))
+}
+
+// 最小限の init_script: 既にファイルがロードされていれば何もしない、
+// ロードされていなければエラーメッセージを表示するだけ。
+// 重い HTML 埋め込みは含まない（build を遅延させないため）
+fn build_container_init_script_minimal() -> String {
+    r#"
+(function() {
+  console.log('[container init] starting');
+  function check() {
+    if (document.getElementById('notifList')) {
+      console.log('[container init] file loaded ok');
+      return;
+    }
+    console.error('[container init] notification-container.html FAILED TO LOAD');
+    try {
+      document.body.innerHTML = '<div style="background:#fee;color:#911;padding:14px;font:13px monospace">'
+        + '<b>FILE LOAD FAILED</b><br>'
+        + 'notification-container.html could not be loaded by Tauri.<br>'
+        + 'URL: ' + location.href + '<br>'
+        + 'This indicates the file is missing from the bundle.'
+        + '</div>';
+    } catch(_) {}
+  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(check, 200);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(check, 200); });
+  }
+})();
+"#.to_string()
 }
 
 // JS から呼ばれるコンテナリサイズ。
@@ -249,22 +288,28 @@ fn enqueue_notification(
     body: String,
     room_id: String,
 ) -> Result<(), String> {
-    log::info!("enqueue_notification: title={}, body={}", title, body);
+    log::info!("[enqueue] A: enqueue_notification: title={}, body={}", title, body);
 
+    log::info!("[enqueue] B: locking saved_position");
     let saved = state.saved_position.lock().unwrap().clone();
+    log::info!("[enqueue] C: saved={}", saved.is_some());
+
+    log::info!("[enqueue] D: calling ensure_container_window");
     let (window, was_new) = ensure_container_window(&app_handle)?;
+    log::info!("[enqueue] E: ensure_container_window returned, was_new={}", was_new);
 
     if was_new {
-        // 新規作成時は ready フラグをクリア（JS が container_loaded 呼ぶまで未準備）
         *state.container_ready.lock().unwrap() = false;
-        log::info!("Container window created, waiting for ready signal");
+        log::info!("[enqueue] F: marked container_ready=false (new container)");
     }
 
-    // 物理ピクセルで正確な位置に移動
+    log::info!("[enqueue] G: resolving window position");
     if let Some((wx, wy, _stack_dir)) = resolve_window_position(&app_handle, saved.as_ref()) {
+        log::info!("[enqueue] H: setting position to ({}, {})", wx, wy);
         window
             .set_position(tauri::PhysicalPosition { x: wx, y: wy })
             .map_err(|e| format!("set_position failed: {}", e))?;
+        log::info!("[enqueue] I: position set");
     }
 
     let stack_dir = saved
@@ -281,14 +326,16 @@ fn enqueue_notification(
         "stackDir": stack_dir.clone(),
     });
 
+    log::info!("[enqueue] J: checking container_ready flag");
     let ready = *state.container_ready.lock().unwrap();
     if ready {
-        log::info!("Container ready, emitting new-notif directly");
+        log::info!("[enqueue] K: ready=true, emitting new-notif");
         window
             .emit("new-notif", payload)
             .map_err(|e| format!("emit failed: {}", e))?;
+        log::info!("[enqueue] L: emit done");
     } else {
-        log::info!("Container not ready, queueing notification");
+        log::info!("[enqueue] K: ready=false, queueing notification");
         state.pending.lock().unwrap().push(PendingNotif {
             id,
             title,
@@ -296,8 +343,10 @@ fn enqueue_notification(
             room_id,
             stack_dir,
         });
+        log::info!("[enqueue] L: queued");
     }
 
+    log::info!("[enqueue] M: returning Ok");
     Ok(())
 }
 
