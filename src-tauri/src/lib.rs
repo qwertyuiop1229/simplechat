@@ -5,25 +5,31 @@ use std::sync::Mutex;
 // HTML を実行ファイルに埋め込む（バンドル不在時のフォールバック）
 const CONTAINER_HTML: &str = include_str!("../../public/notification-container.html");
 
-// ファイルが正常ロードされなかった場合に init_script で強制注入するための JS を作る
+// ファイルが正常ロードされなかった場合に init_script で強制注入するための JS を作る。
+// HTML 内に JS の template literal (${...}) があるため、URL エンコードして
+// JS 側で decodeURIComponent するアプローチを取る。
 fn build_container_init_script() -> String {
-    let html = CONTAINER_HTML
-        .replace('\\', "\\\\")
-        .replace('`', "\\`")
-        .replace("${", "\\${")
-        .replace("</script>", "<\\/script>");
+    let html_encoded: String = urlencoding::encode(CONTAINER_HTML).into_owned();
     format!(
         r#"(function() {{
-  var html = `{}`;
+  console.log('[init_script] starting...');
+  var html_encoded = "{}";
   function inject() {{
-    if (document.getElementById('notifList')) {{ return; }}
     try {{
+      var html = decodeURIComponent(html_encoded);
+      if (document.getElementById('notifList')) {{
+        console.log('[init_script] container HTML already loaded from file, skipping');
+        return;
+      }}
+      console.log('[init_script] file did not load, injecting embedded HTML');
       document.open();
       document.write(html);
       document.close();
     }} catch(e) {{
       console.error('[init_script] inject failed:', e);
-      try {{ document.body.innerHTML = '<pre style="color:red;padding:10px">init failed: ' + (e && e.message) + '</pre>'; }} catch(_){{}}
+      try {{
+        document.body.innerHTML = '<div style="color:red;padding:10px;font:13px monospace;background:#fff">[init_script] inject failed: ' + (e && e.message) + '</div>';
+      }} catch(_){{}}
     }}
   }}
   if (document.readyState === 'complete' || document.readyState === 'interactive') {{
@@ -32,7 +38,7 @@ fn build_container_init_script() -> String {
     document.addEventListener('DOMContentLoaded', function() {{ setTimeout(inject, 50); }});
   }}
 }})();"#,
-        html
+        html_encoded
     )
 }
 

@@ -1240,6 +1240,9 @@
                             <button id="openLogDirBtn" class="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-500 transition-colors">
                                 <i class="fas fa-folder-open mr-1"></i> ログフォルダを開く（デバッグ用）
                             </button>
+                            <div class="text-center text-xs text-gray-400 pt-2" style="font-family: ui-monospace, Consolas, monospace;">
+                                インストール済み: <span id="installedVersion">読み込み中...</span>
+                            </div>
                         </div>
                     </div>
 
@@ -4254,6 +4257,25 @@
               alert('ログフォルダを開けませんでした: ' + (e?.message || e));
             }
           });
+          // バージョン表示（最新かどうか確認するため）
+          (async () => {
+            try {
+              const app = window.__TAURI__?.app;
+              const verSpan = document.getElementById('installedVersion');
+              if (app?.getVersion) {
+                const v = await app.getVersion();
+                verSpan.textContent = 'v' + v;
+              } else if (window.__TAURI__?.core?.invoke) {
+                // フォールバック: invoke で取得
+                const v = await window.__TAURI__.core.invoke('plugin:app|version').catch(() => null);
+                verSpan.textContent = v ? ('v' + v) : '不明';
+              } else {
+                verSpan.textContent = 'Tauri 不検知';
+              }
+            } catch(e) {
+              document.getElementById('installedVersion').textContent = 'エラー: ' + (e?.message || e);
+            }
+          })();
 
           toggleDesktopNotif.checked = localStorage.getItem('simplechat_desktop_notif') !== 'false';
 
