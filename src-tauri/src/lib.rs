@@ -1,46 +1,13 @@
 use tauri::{tray::TrayIconBuilder, menu::{Menu, MenuItem}, Manager, WindowEvent, Emitter};
 use tauri::WebviewWindowBuilder;
+use tauri::http;
 use std::sync::Mutex;
 
-// HTML を実行ファイルに埋め込む（バンドル不在時のフォールバック用、現在は未使用）
-#[allow(dead_code)]
-const CONTAINER_HTML: &str = include_str!("../../public/notification-container.html");
+// カスタムスキーム名: tauri が認識するため英数字のみ（短く）
+const NOTIF_SCHEME: &str = "simpnotif";
 
-// 重い HTML 埋め込み版（現在は build を遅延させるリスクがあるため使わない）
-#[allow(dead_code)]
-fn build_container_init_script() -> String {
-    let html_encoded: String = urlencoding::encode(CONTAINER_HTML).into_owned();
-    format!(
-        r#"(function() {{
-  console.log('[init_script] starting...');
-  var html_encoded = "{}";
-  function inject() {{
-    try {{
-      var html = decodeURIComponent(html_encoded);
-      if (document.getElementById('notifList')) {{
-        console.log('[init_script] container HTML already loaded from file, skipping');
-        return;
-      }}
-      console.log('[init_script] file did not load, injecting embedded HTML');
-      document.open();
-      document.write(html);
-      document.close();
-    }} catch(e) {{
-      console.error('[init_script] inject failed:', e);
-      try {{
-        document.body.innerHTML = '<div style="color:red;padding:10px;font:13px monospace;background:#fff">[init_script] inject failed: ' + (e && e.message) + '</div>';
-      }} catch(_){{}}
-    }}
-  }}
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {{
-    setTimeout(inject, 50);
-  }} else {{
-    document.addEventListener('DOMContentLoaded', function() {{ setTimeout(inject, 50); }});
-  }}
-}})();"#,
-        html_encoded
-    )
-}
+// HTML を実行ファイルに埋め込む。カスタム URI スキーム経由で配信する
+const CONTAINER_HTML: &str = include_str!("../../public/notification-container.html");
 
 const CONTAINER_LABEL: &str = "notif_container";
 const PICKER_LABEL: &str = "notif_pos_picker";
@@ -157,14 +124,21 @@ fn ensure_container_window(
     }
     log::info!("[ensure] step 2: no existing, will create new");
 
-    // BUILD は最小オプションで実行する（特定オプションの組み合わせでハングするため）
-    // size と position だけ指定。装飾・常時最前面などは build 後に setter で適用
-    log::info!("[ensure] step 3: about to call WebviewWindowBuilder::build() with MINIMAL options");
+    // ファイル URL ではなくカスタムスキーム経由で HTML を Rust から直接配信する
+    // (`/notification-container.html` のバンドル/フォールバック問題を完全回避)
+    let url_str = format!("{}://localhost/container", NOTIF_SCHEME);
+    log::info!("[ensure] step 2.5: container URL = {}", url_str);
+    let url = url_str
+        .parse::<url::Url>()
+        .map_err(|e| format!("URL parse failed: {}", e))?;
+
+    // BUILD は最小オプションで実行する
+    log::info!("[ensure] step 3: about to call WebviewWindowBuilder::build()");
     let build_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         WebviewWindowBuilder::new(
             app_handle,
             CONTAINER_LABEL,
-            tauri::WebviewUrl::App("/notification-container.html".into()),
+            tauri::WebviewUrl::External(url),
         )
         .inner_size(CONTAINER_W as f64, CONTAINER_H_INITIAL as f64)
         .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64)
@@ -205,39 +179,6 @@ fn ensure_container_window(
     }
     log::info!("[ensure] step 6: container window setup complete");
     Ok((win, true))
-}
-
-// 最小限の init_script: 既にファイルがロードされていれば何もしない、
-// ロードされていなければエラーメッセージを表示するだけ。
-// 重い HTML 埋め込みは含まない（build を遅延させないため）
-// 現在は未使用 (build をシンプルに保つため init_script 自体を外している)
-#[allow(dead_code)]
-fn build_container_init_script_minimal() -> String {
-    r#"
-(function() {
-  console.log('[container init] starting');
-  function check() {
-    if (document.getElementById('notifList')) {
-      console.log('[container init] file loaded ok');
-      return;
-    }
-    console.error('[container init] notification-container.html FAILED TO LOAD');
-    try {
-      document.body.innerHTML = '<div style="background:#fee;color:#911;padding:14px;font:13px monospace">'
-        + '<b>FILE LOAD FAILED</b><br>'
-        + 'notification-container.html could not be loaded by Tauri.<br>'
-        + 'URL: ' + location.href + '<br>'
-        + 'This indicates the file is missing from the bundle.'
-        + '</div>';
-    } catch(_) {}
-  }
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(check, 200);
-  } else {
-    document.addEventListener('DOMContentLoaded', function() { setTimeout(check, 200); });
-  }
-})();
-"#.to_string()
 }
 
 // JS から呼ばれるコンテナリサイズ。
@@ -740,6 +681,17 @@ fn update_shortcut_key(app_handle: tauri::AppHandle, key: String) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // カスタム URI スキーム: 通知コンテナ HTML を Rust から直接配信
+        // これにより public/ のバンドルや URL フォールバックに依存しない
+        .register_uri_scheme_protocol(NOTIF_SCHEME, |_ctx, _request| {
+            log::info!("[scheme] serving container HTML");
+            http::Response::builder()
+                .status(200)
+                .header("Content-Type", "text/html; charset=utf-8")
+                .header("Access-Control-Allow-Origin", "*")
+                .body(CONTAINER_HTML.as_bytes().to_vec())
+                .unwrap()
+        })
         .manage(NotificationState::default())
         .invoke_handler(tauri::generate_handler![
             enqueue_notification,
