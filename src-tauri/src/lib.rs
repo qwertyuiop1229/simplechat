@@ -157,35 +157,52 @@ fn ensure_container_window(
     }
     log::info!("[ensure] step 2: no existing, will create new");
 
-    // ファイル URL が信頼できなくなった場合に備えて HTML 埋め込みフォールバックを準備
-    // 大きな init_script は build を遅延させるので最小限のフォールバックだけにする
-    let init_script = build_container_init_script_minimal();
-    log::info!("[ensure] step 3: init_script size = {} bytes", init_script.len());
+    // BUILD は最小オプションで実行する（特定オプションの組み合わせでハングするため）
+    // size と position だけ指定。装飾・常時最前面などは build 後に setter で適用
+    log::info!("[ensure] step 3: about to call WebviewWindowBuilder::build() with MINIMAL options");
+    let build_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        WebviewWindowBuilder::new(
+            app_handle,
+            CONTAINER_LABEL,
+            tauri::WebviewUrl::App("/notification-container.html".into()),
+        )
+        .inner_size(CONTAINER_W as f64, CONTAINER_H_INITIAL as f64)
+        .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64)
+        .build()
+    }));
 
-    log::info!("[ensure] step 4: starting WebviewWindowBuilder::build()");
-    let win = WebviewWindowBuilder::new(
-        app_handle,
-        CONTAINER_LABEL,
-        tauri::WebviewUrl::App("/notification-container.html".into()),
-    )
-    .inner_size(CONTAINER_W as f64, CONTAINER_H_INITIAL as f64)
-    .position(OFFSCREEN_X as f64, OFFSCREEN_Y as f64)
-    .always_on_top(true)
-    .decorations(false)
-    .skip_taskbar(true)
-    .resizable(true)
-    .focused(false)
-    .initialization_script(&init_script)
-    .build()
-    .map_err(|e| {
-        log::error!("[ensure] BUILD FAILED: {}", e);
-        format!("container build failed: {}", e)
-    })?;
-    log::info!("[ensure] step 5: WebviewWindowBuilder::build() returned successfully");
+    let win = match build_result {
+        Ok(Ok(w)) => {
+            log::info!("[ensure] step 4: build OK");
+            w
+        }
+        Ok(Err(e)) => {
+            log::error!("[ensure] step 4 BUILD ERROR: {}", e);
+            return Err(format!("build failed: {}", e));
+        }
+        Err(panic) => {
+            log::error!("[ensure] step 4 BUILD PANICKED: {:?}", panic);
+            return Err("build panicked".to_string());
+        }
+    };
 
-    // open_devtools() は呼ばない: 過去にハングする報告あり。
-    // 必要なら F12 で手動オープン（devtools feature 有効）
-
+    // 各設定を1つずつ適用、各ステップでログ
+    log::info!("[ensure] step 5a: set_decorations(false)");
+    if let Err(e) = win.set_decorations(false) {
+        log::warn!("[ensure] set_decorations failed: {}", e);
+    }
+    log::info!("[ensure] step 5b: set_skip_taskbar(true)");
+    if let Err(e) = win.set_skip_taskbar(true) {
+        log::warn!("[ensure] set_skip_taskbar failed: {}", e);
+    }
+    log::info!("[ensure] step 5c: set_always_on_top(true)");
+    if let Err(e) = win.set_always_on_top(true) {
+        log::warn!("[ensure] set_always_on_top failed: {}", e);
+    }
+    log::info!("[ensure] step 5d: set_resizable(false)");
+    if let Err(e) = win.set_resizable(false) {
+        log::warn!("[ensure] set_resizable failed: {}", e);
+    }
     log::info!("[ensure] step 6: container window setup complete");
     Ok((win, true))
 }
@@ -193,6 +210,8 @@ fn ensure_container_window(
 // 最小限の init_script: 既にファイルがロードされていれば何もしない、
 // ロードされていなければエラーメッセージを表示するだけ。
 // 重い HTML 埋め込みは含まない（build を遅延させないため）
+// 現在は未使用 (build をシンプルに保つため init_script 自体を外している)
+#[allow(dead_code)]
 fn build_container_init_script_minimal() -> String {
     r#"
 (function() {
