@@ -1108,7 +1108,7 @@
       /* === サーバービュー用ニックネームヘッダー === */
       #globalAppHeader {
         display: none;
-        background: #1c2d4a;
+        background: #374151;
         color: white;
         padding: 0.45rem 1rem;
         font-size: 0.8rem;
@@ -1116,24 +1116,17 @@
         letter-spacing: 0.01em;
         flex-shrink: 0;
         align-items: center;
+        justify-content: center;
         gap: 8px;
       }
       #globalAppHeader.server-mode {
         display: flex;
       }
       #headerTitle {
-        flex: 1;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         opacity: 0.88;
-      }
-      #headerUserAvatar {
-        width: 22px; height: 22px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.2);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 0.68rem; font-weight: 700; flex-shrink: 0;
       }
       /* === カスタム確認ダイアログ === */
       #customConfirmModal .confirm-box {
@@ -1291,7 +1284,6 @@
     <div class="container">
       <!-- サーバービュー時のニックネームヘッダー -->
       <div id="globalAppHeader">
-        <div id="headerUserAvatar"></div>
         <h1 id="headerTitle"></h1>
       </div>
 
@@ -2877,8 +2869,13 @@
       function updateServerListUserBtn() {
         const btn = document.getElementById("serverListUserBtn");
         if (!btn || !userNickname) return;
-        btn.textContent = userNickname.charAt(0).toUpperCase();
         btn.title = `${userNickname} — プロフィール・設定`;
+        if (userAvatarUrl) {
+          btn.innerHTML = `<img src="${userAvatarUrl}" class="w-full h-full rounded-full object-cover" alt="" style="border-radius:50%">`;
+        } else {
+          btn.innerHTML = '';
+          btn.textContent = userNickname.charAt(0).toUpperCase();
+        }
       }
       document.getElementById("serverListUserBtn").addEventListener("click", () => {
         openSettingsModal("profile");
@@ -3334,11 +3331,9 @@
 
         // ニックネームヘッダーを表示
         const hdr = document.getElementById("globalAppHeader");
-        const hdrAvatar = document.getElementById("headerUserAvatar");
         const hdrTitle = document.getElementById("headerTitle");
         if (hdr) {
-          hdrTitle.textContent = `${userNickname || ""}`;
-          hdrAvatar.textContent = (userNickname || "?").charAt(0).toUpperCase();
+          hdrTitle.textContent = `ニックネーム：${userNickname || ""}${isAdmin ? "（管理者）" : ""}`;
           hdr.classList.add("server-mode");
         }
 
