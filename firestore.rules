@@ -48,6 +48,14 @@ service cloud.firestore {
         allow write: if isListAdmin(appId);
       }
 
+      // 招待コードインデックス（コード→サーバーID の逆引き）
+      // 認証済みユーザーなら読める、書き込みは認証済みユーザー（内容が正しくなくても実害なし）
+      match /inviteIndex/{code} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+        allow delete: if isAuthenticated();
+      }
+
       // 2. ユーザー情報
       match /users/{userId} {
         allow read: if isAuthenticated();

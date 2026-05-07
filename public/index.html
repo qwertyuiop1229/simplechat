@@ -3553,21 +3553,14 @@
       async function joinServerByInviteCode(code) {
         code = code.toUpperCase().trim();
 
-        // コードを全サーバーから検索
-        const serversSnap = await getDocs(collection(db, `artifacts/${appId}/servers`));
-        let foundServerId = null;
-        let foundInvite = null;
+        // inviteIndex からサーバーIDを逆引き（全サーバー一覧取得不要）
+        const indexSnap = await getDoc(doc(db, `artifacts/${appId}/inviteIndex`, code));
+        if (!indexSnap.exists()) throw new Error("招待コードが見つかりません");
+        const foundServerId = indexSnap.data().serverId;
 
-        for (const serverDoc of serversSnap.docs) {
-          const inviteSnap = await getDoc(doc(db, `artifacts/${appId}/servers/${serverDoc.id}/inviteCodes`, code));
-          if (inviteSnap.exists()) {
-            foundServerId = serverDoc.id;
-            foundInvite = inviteSnap.data();
-            break;
-          }
-        }
-
-        if (!foundServerId) throw new Error("招待コードが見つかりません");
+        const inviteSnap = await getDoc(doc(db, `artifacts/${appId}/servers/${foundServerId}/inviteCodes`, code));
+        if (!inviteSnap.exists()) throw new Error("招待コードが見つかりません");
+        const foundInvite = inviteSnap.data();
         if (foundInvite.disabled) throw new Error("この招待コードは無効化されています");
         if (foundInvite.expiresAt && foundInvite.expiresAt.toDate() < new Date()) throw new Error("招待コードの有効期限が切れています");
         if (foundInvite.maxUses > 0 && foundInvite.uses >= foundInvite.maxUses) throw new Error("招待コードの使用上限に達しています");
@@ -4252,14 +4245,17 @@
         });
         listEl.querySelectorAll(".copy-invite-btn").forEach(btn => {
           btn.addEventListener("click", () => {
-            navigator.clipboard.writeText(`サーバーID: ${currentServerId} / 招待コード: ${btn.dataset.code}`);
+            navigator.clipboard.writeText(btn.dataset.code);
             alertMessage("コピーしました", "success");
           });
         });
         listEl.querySelectorAll(".disable-invite-btn").forEach(btn => {
           btn.addEventListener("click", async () => {
             if (!await showCustomConfirm("このコードを無効化しますか？", "無効化")) return;
-            await updateDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/inviteCodes`, btn.dataset.code), { disabled: true });
+            await Promise.all([
+              updateDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/inviteCodes`, btn.dataset.code), { disabled: true }),
+              deleteDoc(doc(db, `artifacts/${appId}/inviteIndex`, btn.dataset.code)),
+            ]);
             await loadInviteCodes();
           });
         });
@@ -4287,7 +4283,10 @@
           inviteData.expiresAt = null;
         }
         try {
-          await setDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/inviteCodes`, code), inviteData);
+          await Promise.all([
+            setDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/inviteCodes`, code), inviteData),
+            setDoc(doc(db, `artifacts/${appId}/inviteIndex`, code), { serverId: currentServerId }),
+          ]);
           await loadInviteCodes();
           alertMessage(`招待コード ${code} を作成しました`, "success");
         } catch(e) { alertMessage("作成に失敗しました", "error"); }
