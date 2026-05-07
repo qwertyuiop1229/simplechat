@@ -2517,7 +2517,22 @@
         try {
           await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
-          authMessage.textContent = `メールアドレスまたはパスワードが違います。`;
+          const code = error.code || "";
+          if (code === "auth/user-not-found") {
+            authMessage.textContent = "このメールアドレスは登録されていません。";
+          } else if (code === "auth/wrong-password") {
+            authMessage.textContent = "パスワードが正しくありません。";
+          } else if (code === "auth/invalid-credential") {
+            authMessage.textContent = "メールアドレスまたはパスワードが正しくありません。";
+          } else if (code === "auth/invalid-email") {
+            authMessage.textContent = "メールアドレスの形式が正しくありません。";
+          } else if (code === "auth/user-disabled") {
+            authMessage.textContent = "このアカウントは無効になっています。管理者にお問い合わせください。";
+          } else if (code === "auth/too-many-requests") {
+            authMessage.textContent = "ログイン試行が多すぎます。しばらく待ってからお試しください。";
+          } else {
+            authMessage.textContent = "ログインに失敗しました。";
+          }
         } finally {
           loadingOverlay.classList.add("hidden");
         }
@@ -2551,7 +2566,7 @@
               } else if (err.code === "auth/weak-password") {
                   authMessage.textContent = "パスワードが弱すぎます（6文字以上）。";
               } else {
-                  authMessage.textContent = "アカウント作成に失敗しました: " + err.message;
+                  authMessage.textContent = "アカウント作成に失敗しました。もう一度お試しください。";
               }
           } finally {
               loadingOverlay.classList.add("hidden");
@@ -4018,7 +4033,7 @@
             if (!await showCustomConfirm(`「${btn.dataset.roomName}」を削除しますか？`, "削除")) return;
             loadingOverlay.classList.remove("hidden");
             try {
-              await deleteDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms`, btn.dataset.roomId));
+              await deleteRoomCascade(currentServerId, btn.dataset.roomId);
               if (currentRoomId === btn.dataset.roomId) {
                 currentRoomId = null;
                 currentRoomHeader.classList.add("hidden");
@@ -4219,7 +4234,7 @@
         if (currentServerData?.createdBy !== userId && !isAdmin) { alertMessage("削除できるのはサーバーオーナーのみです", "error"); return; }
         loadingOverlay.classList.remove("hidden");
         try {
-          await deleteDoc(doc(db, `artifacts/${appId}/servers`, currentServerId));
+          await deleteServerCascade(currentServerId);
           serverSettingsModal.classList.add("hidden");
           leaveServerView();
           alertMessage("サーバーを削除しました", "success");
@@ -4740,6 +4755,48 @@
             box.style.animation = "fadeIn 0.2s ease reverse forwards";
             setTimeout(() => box.remove(), 200);
           }, 2800);
+      }
+
+      // =========================================================================
+      // カスケード削除ユーティリティ
+      // =========================================================================
+
+      // コレクション内の全ドキュメントをバッチ削除（500件制限をページングで回避）
+      async function batchDeleteCollection(colRef) {
+        let hasMore = true;
+        while (hasMore) {
+          const snap = await getDocs(query(colRef, limit(490)));
+          if (snap.empty) break;
+          const batch = writeBatch(db);
+          snap.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          hasMore = snap.docs.length === 490;
+        }
+      }
+
+      // ルームと配下の全データ（messages, readReceipts）を削除
+      async function deleteRoomCascade(serverId, roomId) {
+        const base = `artifacts/${appId}/servers/${serverId}/rooms/${roomId}`;
+        await batchDeleteCollection(collection(db, `${base}/messages`));
+        await batchDeleteCollection(collection(db, `${base}/readReceipts`));
+        await deleteDoc(doc(db, `artifacts/${appId}/servers/${serverId}/rooms`, roomId));
+      }
+
+      // サーバーと配下の全データ（rooms, messages, readReceipts, profiles, inviteCodes, secrets）を削除
+      async function deleteServerCascade(serverId) {
+        const base = `artifacts/${appId}/servers/${serverId}`;
+        // 全ルームを取得して配下も削除
+        const roomsSnap = await getDocs(collection(db, `${base}/rooms`));
+        for (const roomDoc of roomsSnap.docs) {
+          const rb = `${base}/rooms/${roomDoc.id}`;
+          await batchDeleteCollection(collection(db, `${rb}/messages`));
+          await batchDeleteCollection(collection(db, `${rb}/readReceipts`));
+          await deleteDoc(roomDoc.ref);
+        }
+        await batchDeleteCollection(collection(db, `${base}/profiles`));
+        await batchDeleteCollection(collection(db, `${base}/inviteCodes`));
+        await batchDeleteCollection(collection(db, `${base}/secrets`));
+        await deleteDoc(doc(db, `artifacts/${appId}/servers`, serverId));
       }
 
       function showMentionToast(fromNickname) {
