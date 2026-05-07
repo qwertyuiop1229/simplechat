@@ -14,6 +14,12 @@ service cloud.firestore {
         (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/adminList).data.emails);
     }
 
+    function isListAdmin(appId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/artifacts/$(appId)/settings/listAdminList) &&
+        (request.auth.token.email in get(/databases/$(database)/documents/artifacts/$(appId)/settings/listAdminList).data.emails);
+    }
+
     function isServerAdmin(appId, serverId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/artifacts/$(appId)/servers/$(serverId)) &&
@@ -36,6 +42,10 @@ service cloud.firestore {
       match /settings/{docId} {
         allow read: if isAuthenticated();
         allow write: if isGlobalAdmin(appId);
+      }
+      // リスト管理者は allowedEmails のみ書き込み可
+      match /settings/allowedEmails {
+        allow write: if isListAdmin(appId);
       }
 
       // 2. ユーザー情報

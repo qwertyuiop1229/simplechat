@@ -1558,8 +1558,11 @@
               <button id="adminTabAllowedBtn" class="py-3 px-3 text-sm font-semibold border-b-2 border-gray-900 text-gray-900 transition-colors mr-2">
                 <i class="fas fa-envelope mr-1.5 text-xs"></i>許可リスト
               </button>
-              <button id="adminTabAdminsBtn" class="py-3 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors">
+              <button id="adminTabAdminsBtn" class="admin-only-tab py-3 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors mr-2">
                 <i class="fas fa-user-shield mr-1.5 text-xs"></i>管理者
+              </button>
+              <button id="adminTabListAdminsBtn" class="admin-only-tab py-3 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors">
+                <i class="fas fa-list-check mr-1.5 text-xs"></i>リスト管理者
               </button>
             </div>
 
@@ -1588,6 +1591,18 @@
                     class="px-4 py-2.5 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold rounded-xl transition-colors whitespace-nowrap">追加</button>
                 </div>
                 <div id="adminEmailsList" class="space-y-2"></div>
+              </div>
+
+              <!-- リスト管理者タブ -->
+              <div id="adminTabListAdminsContent" class="p-6 hidden">
+                <p class="text-xs text-gray-400 mb-4 leading-relaxed">許可リストの編集のみできる管理者を管理します。それ以外は通常ユーザーと同じです。</p>
+                <div class="flex gap-2 mb-4">
+                  <input type="email" id="newListAdminEmailInput" placeholder="メールアドレスを追加..."
+                    class="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-gray-400 transition-colors" />
+                  <button id="addListAdminEmailButton"
+                    class="px-4 py-2.5 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold rounded-xl transition-colors whitespace-nowrap">追加</button>
+                </div>
+                <div id="listAdminEmailsList" class="space-y-2"></div>
               </div>
 
             </div>
@@ -2155,6 +2170,7 @@
       let userId = null;
       let userNickname = null;
       let isAdmin = false;
+      let isListAdmin = false;
       const isTauri = window.__TAURI__ !== undefined;
       
       let currentRoomId = null;
@@ -2246,6 +2262,9 @@
       const newAdminEmailInput = document.getElementById("newAdminEmailInput");
       const addAdminEmailButton = document.getElementById("addAdminEmailButton");
       const adminEmailsList = document.getElementById("adminEmailsList");
+      const newListAdminEmailInput = document.getElementById("newListAdminEmailInput");
+      const addListAdminEmailButton = document.getElementById("addListAdminEmailButton");
+      const listAdminEmailsList = document.getElementById("listAdminEmailsList");
       const adminMessage = document.getElementById("adminMessage");
 
       // User Panel
@@ -2397,10 +2416,23 @@
                 } catch(e) {
                   console.error("allowedEmails check error:", e);
                 }
+
+                // リスト管理者チェック
+                try {
+                  const listAdminRef = doc(db, `artifacts/${appId}/settings`, "listAdminList");
+                  const listAdminSnap = await getDoc(listAdminRef);
+                  if (listAdminSnap.exists() && listAdminSnap.data().emails) {
+                    isListAdmin = listAdminSnap.data().emails.includes(user.email);
+                  } else {
+                    isListAdmin = false;
+                  }
+                } catch(e) {
+                  isListAdmin = false;
+                }
               }
 
-              // 管理者であれば「管理者設定」ボタンを表示
-              if (isAdmin) {
+              // 管理者またはリスト管理者であれば「管理者設定」ボタンを表示
+              if (isAdmin || isListAdmin) {
                 adminPanelContainer.classList.remove("hidden");
               } else {
                 adminPanelContainer.classList.add("hidden");
@@ -2432,7 +2464,7 @@
               }
             } else {
               // Cleanup on logout
-              userId = null; userNickname = null; isAdmin = false; isAuthReady = false;
+              userId = null; userNickname = null; isAdmin = false; isListAdmin = false; isAuthReady = false;
               currentRoomId = null; currentServerId = null; currentServerData = null;
               headerTitle.textContent = "";
               currentRoomHeader.classList.add("hidden");
@@ -2574,28 +2606,29 @@
       let adminCurrentTab = "allowed";
       function switchAdminTab(tab) {
           adminCurrentTab = tab;
-          const allowedBtn = document.getElementById("adminTabAllowedBtn");
-          const adminsBtn  = document.getElementById("adminTabAdminsBtn");
-          const allowedContent = document.getElementById("adminTabAllowedContent");
-          const adminsContent  = document.getElementById("adminTabAdminsContent");
-          if (tab === "allowed") {
-              allowedBtn.classList.replace("border-transparent", "border-gray-900");
-              allowedBtn.classList.replace("text-gray-400", "text-gray-900");
-              adminsBtn.classList.replace("border-gray-900", "border-transparent");
-              adminsBtn.classList.replace("text-gray-900", "text-gray-400");
-              allowedContent.classList.remove("hidden");
-              adminsContent.classList.add("hidden");
-          } else {
-              adminsBtn.classList.replace("border-transparent", "border-gray-900");
-              adminsBtn.classList.replace("text-gray-400", "text-gray-900");
-              allowedBtn.classList.replace("border-gray-900", "border-transparent");
-              allowedBtn.classList.replace("text-gray-900", "text-gray-400");
-              adminsContent.classList.remove("hidden");
-              allowedContent.classList.add("hidden");
-          }
+          const tabs = [
+            { id: "adminTabAllowedBtn",     content: "adminTabAllowedContent",     key: "allowed" },
+            { id: "adminTabAdminsBtn",      content: "adminTabAdminsContent",      key: "admins" },
+            { id: "adminTabListAdminsBtn",  content: "adminTabListAdminsContent",  key: "listAdmins" },
+          ];
+          tabs.forEach(t => {
+            const btn = document.getElementById(t.id);
+            const cnt = document.getElementById(t.content);
+            if (!btn || !cnt) return;
+            if (t.key === tab) {
+              btn.classList.replace("border-transparent", "border-gray-900");
+              btn.classList.replace("text-gray-400", "text-gray-900");
+              cnt.classList.remove("hidden");
+            } else {
+              btn.classList.replace("border-gray-900", "border-transparent");
+              btn.classList.replace("text-gray-900", "text-gray-400");
+              cnt.classList.add("hidden");
+            }
+          });
       }
       document.getElementById("adminTabAllowedBtn").addEventListener("click", () => switchAdminTab("allowed"));
       document.getElementById("adminTabAdminsBtn").addEventListener("click", () => switchAdminTab("admins"));
+      document.getElementById("adminTabListAdminsBtn").addEventListener("click", () => switchAdminTab("listAdmins"));
 
       // メールアドレスのアバター頭文字取得
       function emailInitial(email) {
@@ -2664,12 +2697,19 @@
       async function loadAdminPanelData() {
           adminMessage.textContent = "読み込み中...";
           try {
-              const [allowedSnap, adminSnap] = await Promise.all([
-                  getDoc(doc(db, `artifacts/${appId}/settings`, "allowedEmails")),
-                  getDoc(doc(db, `artifacts/${appId}/settings`, "adminList")),
-              ]);
-              renderAllowedEmails(allowedSnap.exists() ? allowedSnap.data().emails || [] : []);
-              renderAdminEmails(adminSnap.exists() ? adminSnap.data().emails || [] : []);
+              if (isAdmin) {
+                  const [allowedSnap, adminSnap, listAdminSnap] = await Promise.all([
+                      getDoc(doc(db, `artifacts/${appId}/settings`, "allowedEmails")),
+                      getDoc(doc(db, `artifacts/${appId}/settings`, "adminList")),
+                      getDoc(doc(db, `artifacts/${appId}/settings`, "listAdminList")),
+                  ]);
+                  renderAllowedEmails(allowedSnap.exists() ? allowedSnap.data().emails || [] : []);
+                  renderAdminEmails(adminSnap.exists() ? adminSnap.data().emails || [] : []);
+                  renderListAdminEmails(listAdminSnap.exists() ? listAdminSnap.data().emails || [] : []);
+              } else if (isListAdmin) {
+                  const allowedSnap = await getDoc(doc(db, `artifacts/${appId}/settings`, "allowedEmails"));
+                  renderAllowedEmails(allowedSnap.exists() ? allowedSnap.data().emails || [] : []);
+              }
               adminMessage.textContent = "";
           } catch (e) {
               console.error(e);
@@ -2678,7 +2718,11 @@
       }
 
       openAdminModalButton.addEventListener("click", () => {
-          if (!isAdmin) return;
+          if (!isAdmin && !isListAdmin) return;
+          // リスト管理者には全体管理者専用タブを隠す
+          document.querySelectorAll(".admin-only-tab").forEach(el => {
+              el.style.display = isAdmin ? "" : "none";
+          });
           switchAdminTab("allowed");
           loadAdminPanelData();
           openModal(adminModal);
@@ -2754,6 +2798,56 @@
               await updateDoc(ref, { emails: arrayRemove(email) });
               const snap = await getDoc(ref);
               renderAdminEmails(snap.exists() ? snap.data().emails || [] : []);
+              adminMessage.textContent = "削除しました。";
+          } catch(e) {
+              console.error(e);
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      }
+
+      // リスト管理者の render / add / remove
+      function renderListAdminEmails(emails) {
+          listAdminEmailsList.innerHTML = "";
+          if (emails.length === 0) {
+              const empty = document.createElement("p");
+              empty.className = "text-sm text-gray-400 text-center py-4";
+              empty.textContent = "リスト管理者はいません";
+              listAdminEmailsList.appendChild(empty);
+              return;
+          }
+          emails.forEach(e => {
+              listAdminEmailsList.appendChild(makeEmailListItem(e, false, () => removeListAdminEmail(e)));
+          });
+      }
+
+      addListAdminEmailButton.addEventListener("click", async () => {
+          const email = newListAdminEmailInput.value.trim();
+          if (!email) return;
+          adminMessage.textContent = "追加中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "listAdminList");
+              const snap = await getDoc(ref);
+              const emails = snap.exists() ? snap.data().emails || [] : [];
+              if (emails.includes(email)) { adminMessage.textContent = "すでにリスト管理者です。"; return; }
+              emails.push(email);
+              await setDoc(ref, { emails }, { merge: true });
+              newListAdminEmailInput.value = "";
+              renderListAdminEmails(emails);
+              adminMessage.textContent = "追加しました。";
+          } catch(e) {
+              console.error(e);
+              adminMessage.textContent = "エラーが発生しました。";
+          }
+      });
+
+      async function removeListAdminEmail(email) {
+          if (!await showCustomConfirm(`「${email}」をリスト管理者から削除しますか？`, "削除")) return;
+          adminMessage.textContent = "削除中...";
+          try {
+              const ref = doc(db, `artifacts/${appId}/settings`, "listAdminList");
+              await updateDoc(ref, { emails: arrayRemove(email) });
+              const snap = await getDoc(ref);
+              renderListAdminEmails(snap.exists() ? snap.data().emails || [] : []);
               adminMessage.textContent = "削除しました。";
           } catch(e) {
               console.error(e);
