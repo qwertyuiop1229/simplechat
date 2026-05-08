@@ -59,6 +59,10 @@ if (-not $y) {
 
 Write-Host "Deploying v$newVersion..." -ForegroundColor Green
 
+# Build Tailwind CSS
+Write-Host "[0/4] Building Tailwind CSS..." -ForegroundColor Green
+node_modules\.bin\tailwindcss.cmd -i tailwind.input.css -o public/styles.css --minify
+
 # 3. Write new version to tauri.conf.json
 $tauriConfRaw = Get-Content $tauriConfPath -Raw
 $tauriConfRaw = $tauriConfRaw -replace [regex]::Escape("""version"": ""$currentVersion"""), """version"": ""$newVersion"""

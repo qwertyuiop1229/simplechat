@@ -5,6 +5,7 @@
   "hosting": {
     "public": "public",
     "predeploy": [
+      "node_modules/.bin/tailwindcss.cmd -i tailwind.input.css -o public/styles.css --minify",
       "npm --prefix server run deploy"
     ],
     "ignore": [

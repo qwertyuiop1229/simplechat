@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/qwertyuiop1229/simplechat#readme",
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1"
+    "@tauri-apps/cli": "^2.10.1",
+    "tailwindcss": "^3.4.19"
   }
 }
