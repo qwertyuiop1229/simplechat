@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 
 <head>
@@ -2970,6 +2970,7 @@
       arrayUnion,
       arrayRemove,
       increment,
+      documentId
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import {
       getMessaging,
@@ -4342,6 +4343,8 @@
         unsubscribeUserStatus();
         unsubscribeUserStatus = null;
       }
+      unsubscribeStatusArray.forEach(unsub => unsub());
+      unsubscribeStatusArray = [];
     }
 
     const handleFocus = () => {
@@ -4388,8 +4391,18 @@
       }
     }
 
+    let _lastReportedStatusStr = null;
+
     async function updateUserStatus(state) {
       if (!userId || !userNickname) return;
+
+      // 差分チェック用のステート文字列
+      const currentStatusStr = JSON.stringify({ state, roomId: currentRoomId, nickname: userNickname, avatarUrl: userAvatarUrl });
+      
+      // 前回と全く同じ状態であれば無駄な書き込みをスキップ
+      if (_lastReportedStatusStr === currentStatusStr) {
+        return;
+      }
 
       const statusRef = doc(db, `artifacts/${appId}/status`, userId);
       try {
@@ -4401,6 +4414,7 @@
           currentRoomId: currentRoomId,
         };
         await setDoc(statusRef, updateData, { merge: true });
+        _lastReportedStatusStr = currentStatusStr;
       } catch (error) {
         console.error("Status update error:", error);
       }
@@ -4411,19 +4425,42 @@
     window.sendOfflineBeacon = sendOfflineBeacon;
     window.updateUserStatus = updateUserStatus;
 
-    function subscribeToUserStatus() {
-      if (unsubscribeUserStatus) unsubscribeUserStatus();
+    let unsubscribeStatusArray = [];
 
-      const statusQuery = query(collection(db, `artifacts/${appId}/status`));
-      unsubscribeUserStatus = onSnapshot(statusQuery, (snapshot) => {
+    function subscribeToUserStatus() {
+      if (unsubscribeUserStatus) { unsubscribeUserStatus(); unsubscribeUserStatus = null; }
+      unsubscribeStatusArray.forEach(unsub => unsub());
+      unsubscribeStatusArray = [];
+
+      const memberIds = currentServerData?.joinedUsers || [];
+      // サーバー未選択時、またはメンバーが0人の場合は監視しない
+      if (memberIds.length === 0) {
         cachedUsers = [];
-        snapshot.forEach((doc) => {
-          cachedUsers.push({ id: doc.id, ...doc.data() });
-        });
         renderMembersList(cachedUsers);
-      }, (error) => {
-        console.error("メンバーリストの購読エラー:", error);
-        membersList.innerHTML = `<div class="p-4 text-xs text-red-600">メンバーを読み込めません。</div>`;
+        return;
+      }
+
+      // Firestoreの "in" クエリは最大30件の制限があるため分割
+      const chunkSize = 30;
+      const chunks = [];
+      for (let i = 0; i < memberIds.length; i += chunkSize) {
+        chunks.push(memberIds.slice(i, i + chunkSize));
+      }
+
+      const usersMap = new Map();
+
+      chunks.forEach((chunk) => {
+        const statusQuery = query(collection(db, `artifacts/${appId}/status`), where(documentId(), "in", chunk));
+        const unsub = onSnapshot(statusQuery, (snapshot) => {
+          snapshot.forEach((doc) => {
+            usersMap.set(doc.id, { id: doc.id, ...doc.data() });
+          });
+          cachedUsers = Array.from(usersMap.values());
+          renderMembersList(cachedUsers);
+        }, (error) => {
+          console.error("メンバーリストの購読エラー:", error);
+        });
+        unsubscribeStatusArray.push(unsub);
       });
     }
 
@@ -4709,6 +4746,9 @@
       membersSidebar.classList.remove("hidden");
       // サーバーメンバーでメンバーリストを即時更新
       renderMembersList(cachedUsers);
+
+      // サーバーに入室したタイミングで、対象メンバーを絞り込んでステータス監視を再設定
+      subscribeToUserStatus();
     }
 
     // サーバーを出てリストに戻る
