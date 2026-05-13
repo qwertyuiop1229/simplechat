@@ -12,10 +12,10 @@
   <meta name="robots" content="noindex, nofollow" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#3b82f6" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=4" />
-  <link rel="icon" type="image/png" href="icon-192x192.png?v=4" />
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=4" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=4" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=5" />
+  <link rel="icon" type="image/png" href="icon-192x192.png?v=5" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=5" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -616,12 +616,17 @@
     .container {
       width: 100% !important;
       max-width: none !important;
-      height: 100vh !important;
-      min-height: 100vh !important;
+      height: 100dvh !important;
+      min-height: 100dvh !important;
       margin: 0 !important;
       padding: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
+    }
+
+    /* iOS safe-area: 画面サイズ問わず入力欄がホームインジケータに被らないよう */
+    #messageInputArea {
+      padding-bottom: max(1rem, calc(0.75rem + env(safe-area-inset-bottom, 0px)));
     }
 
     /* --- 追加機能用スタイル --- */
@@ -660,21 +665,27 @@
       background-color: #f1f5f9;
     }
 
-    /* 未読バッジ */
+    /* 未読バッジ（ルーム用・小さいドット） */
     .unread-badge {
       background-color: #1f2937;
-      color: white;
-      font-size: 0.7rem;
-      font-weight: 700;
-      min-width: 18px;
-      height: 18px;
-      border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0 5px;
-      margin-left: 6px;
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
+      border-radius: 50%;
       flex-shrink: 0;
+      margin-left: auto;
+    }
+
+    /* サーバーカード未読ドット */
+    .server-card-unread-dot {
+      position: absolute;
+      top: 9px;
+      right: 9px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #1f2937;
+      border: 2px solid white;
     }
 
     /* 検索バー */
@@ -1333,6 +1344,7 @@
       display: flex;
       flex-direction: column;
       gap: 7px;
+      position: relative;
     }
 
     .server-card:hover {
@@ -1758,14 +1770,25 @@
       font-weight: 600;
       letter-spacing: 0.01em;
     }
+    .mobile-nav-tab {
+      position: relative;
+    }
+    .mobile-notif-dot {
+      position: absolute;
+      top: 8px;
+      right: calc(50% - 14px);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #1f2937;
+      border: 2px solid #1f2937;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
+    }
 
     /* Body padding for BottomNav when visible */
     body.has-mobile-nav #serverListScreen,
     body.has-mobile-nav #mobileProfileScreen,
     body.has-mobile-nav #mobileNotifScreen {
-      padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-    }
-    body.has-mobile-nav .container {
       padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px));
     }
     body.has-mobile-nav .server-grid {
@@ -2159,6 +2182,9 @@
       #mobileBottomNav {
         display: flex;
       }
+      #serverListNotifBtn {
+        display: none !important;
+      }
     }
     @media (max-width: 640px) {
       #joinServerBtn .btn-text, #createServerBtn .btn-text { display: none; }
@@ -2320,6 +2346,9 @@
               <button class="settings-nav-item" id="snav-settings" onclick="switchDiscordSettingsTab('settings')">
                 <i class="fas fa-bell fa-fw"></i>通知・設定
               </button>
+              <button class="settings-nav-item" id="snav-appinfo" onclick="switchDiscordSettingsTab('appinfo')">
+                <i class="fas fa-info-circle fa-fw"></i>アプリ情報
+              </button>
               <div class="settings-nav-divider"></div>
               <div id="adminPanelContainer" class="hidden">
                 <div class="settings-nav-label">管理</div>
@@ -2381,6 +2410,26 @@
                 </div>
               </div>
               
+              <!-- アプリ情報セクション -->
+              <div id="appinfoSection" class="settings-content-section space-y-6">
+                <div class="settings-section-title">アプリ情報</div>
+                <div class="bg-gray-50 rounded-2xl p-5 space-y-4">
+                  <div class="flex items-center gap-4">
+                    <img src="icon-192x192.png" alt="Covo" class="w-14 h-14 rounded-2xl shadow" onerror="this.style.display='none'">
+                    <div>
+                      <div class="text-lg font-bold text-gray-800">Covo</div>
+                      <div class="text-xs text-gray-400">チャットアプリ</div>
+                    </div>
+                  </div>
+                  <div class="border-t border-gray-200 pt-4 space-y-3">
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm text-gray-500">バージョン</span>
+                      <span class="text-sm font-mono font-bold text-gray-800" id="appInfoVersion">—</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div id="settingsSection" class="settings-content-section space-y-6">
                 <div class="settings-section-title">通知・設定</div>
                 <div>
@@ -2441,10 +2490,11 @@
       
   <!-- 共有管理者コンテンツ -->
   <div id="adminPanelSharedContent" class="flex flex-col h-full hidden">
-    <div class="flex border-b border-gray-100 mb-4 flex-shrink-0">
+    <div class="flex border-b border-gray-100 mb-4 flex-shrink-0 flex-wrap gap-y-1">
       <button id="adminTabAllowedBtn" class="py-2 px-3 text-sm font-semibold border-b-2 border-gray-900 text-gray-900 transition-colors mr-2"><i class="fas fa-envelope mr-1.5 text-xs"></i>許可リスト</button>
       <button id="adminTabAdminsBtn" class="admin-only-tab py-2 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors mr-2"><i class="fas fa-user-shield mr-1.5 text-xs"></i>管理者</button>
-      <button id="adminTabListAdminsBtn" class="admin-only-tab py-2 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors"><i class="fas fa-list-check mr-1.5 text-xs"></i>リスト管理者</button>
+      <button id="adminTabListAdminsBtn" class="admin-only-tab py-2 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors mr-2"><i class="fas fa-list-check mr-1.5 text-xs"></i>リスト管理者</button>
+      <button id="adminTabStorageBtn" class="admin-only-tab py-2 px-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors"><i class="fas fa-database mr-1.5 text-xs"></i>ストレージ</button>
     </div>
     
     <div class="flex-1 overflow-y-auto pr-2">
@@ -2471,6 +2521,56 @@
           <button id="addListAdminEmailButton" class="px-4 py-2 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg">追加</button>
         </div>
         <div id="listAdminEmailsList" class="space-y-2"></div>
+      </div>
+
+      <!-- ストレージタブ (管理者専用) -->
+      <div id="adminTabStorageContent" class="space-y-4 hidden">
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-gray-400 leading-relaxed">添付ファイルのストレージ使用状況</p>
+          <button id="refreshStorageStatsBtn" class="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold rounded-lg transition-colors">
+            <i class="fas fa-sync-alt text-xs"></i>更新
+          </button>
+        </div>
+
+        <!-- Cloudflare Workers KV -->
+        <div style="background:#1e293b;" class="rounded-2xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i class="fas fa-server text-white text-sm"></i>
+            <span class="text-white text-sm font-bold">Cloudflare Workers KV</span>
+            <span class="ml-auto text-white/40 text-xs">上限 1 GB</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.12);" class="rounded-full h-2.5 overflow-hidden mb-2">
+            <div id="kvUsageBar" class="h-full rounded-full transition-all duration-500" style="width:0%;background:rgba(255,255,255,0.85);"></div>
+          </div>
+          <div class="flex justify-between items-center">
+            <span id="kvUsageText" class="text-white/70 text-xs">読み込み中...</span>
+            <span id="kvFileCount" class="text-white/40 text-xs"></span>
+          </div>
+        </div>
+
+        <!-- Cloudinary -->
+        <div style="background:#1e293b;" class="rounded-2xl p-4">
+          <div class="flex items-center gap-2 mb-3">
+            <i class="fas fa-cloud text-white text-sm"></i>
+            <span class="text-white text-sm font-bold">Cloudinary（画像）</span>
+            <span id="cloudinaryLimitText" class="ml-auto text-white/40 text-xs">—</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.12);" class="rounded-full h-2.5 overflow-hidden mb-2">
+            <div id="cloudinaryUsageBar" class="h-full rounded-full transition-all duration-500" style="width:0%;background:rgba(255,255,255,0.85);"></div>
+          </div>
+          <div class="flex justify-between items-center">
+            <span id="cloudinaryUsageText" class="text-white/70 text-xs">読み込み中...</span>
+            <span id="cloudinaryResourceCount" class="text-white/40 text-xs"></span>
+          </div>
+        </div>
+
+        <!-- 一括削除 -->
+        <div class="pt-2 border-t border-gray-100">
+          <button id="bulkDeleteAllFilesBtn" class="w-full py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2" style="background:#1e293b;color:rgba(255,255,255,0.7);">
+            <i class="fas fa-trash-alt"></i> 全ファイルを一括削除
+          </button>
+          <p class="text-xs text-gray-400 mt-2 text-center">KVとCloudinaryの全ファイルが削除されます</p>
+        </div>
       </div>
     </div>
     
@@ -2897,7 +2997,7 @@
             <!-- メンションポップアップ -->
             <div id="mentionPopup" class="hidden"></div>
             <div class="flex items-end gap-1.5">
-              <button id="fileAttachButton" class="input-side-btn" title="ファイルを添付" disabled><i
+              <button id="fileAttachButton" class="input-side-btn" title="ファイルを添付（画像はそのまま添付・その他はURLリンク化）" disabled><i
                   class="fas fa-paperclip"></i></button>
               <button id="mentionButton" class="input-side-btn" title="メンション"><i class="fas fa-at"></i></button>
               <input type="file" id="fileAttachInput" class="hidden" />
@@ -2960,21 +3060,20 @@
 
   <!-- Firebase SDKのインポート -->
   <script type="module">
-    // アプリのバージョン管理（アプデ時にここを書き換える）
-    const APP_VERSION = "1.0.1"; 
+    // ========= Cloudflare Worker ベースURL =========
+    const WORKER_BASE_URL = 'https://simplechat-api.astro-fray-server.workers.dev';
 
-    function checkUpdate() {
-      const savedVersion = localStorage.getItem('app_version');
-      if (savedVersion && savedVersion !== APP_VERSION) {
-        // バージョンが違う場合、キャッシュをクリアして強制リロード
-        localStorage.clear(); // 必要に応じて特定項目のみ削除
-        localStorage.setItem('app_version', APP_VERSION);
-        window.location.reload(true); 
-      } else {
-        localStorage.setItem('app_version', APP_VERSION);
-      }
-    }
-    checkUpdate();
+    // ========= バージョン管理 =========
+    // 唯一のバージョン管理ファイル: public/version.json
+    // 手動変更時は version.json だけ編集すればよい（他のファイルは不要）
+    // deploy.ps1 も version.json だけ更新する
+    // バージョンはソースコード(version.json)から直接 fetch して使用する
+    // localStorage には保存しない
+    let _appVersion = null;
+    fetch('/version.json', { cache: 'no-cache' })
+      .then(r => r.json())
+      .then(d => { _appVersion = d.version || null; })
+      .catch(() => { _appVersion = null; });
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import {
@@ -3007,7 +3106,8 @@
       arrayUnion,
       arrayRemove,
       increment,
-      documentId
+      documentId,
+      collectionGroup
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import {
       getMessaging,
@@ -3051,6 +3151,19 @@
       return true;
     }
 
+    async function uploadToExternalService(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('uploaderId', userId || '');
+      const res = await fetch(`${WORKER_BASE_URL}/api/uploadFile`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return data.url;
+    }
+
     function uploadToCloudinary(file, onProgress, folder = "simplechat") {
       if (CLOUDINARY_CLOUD_NAME === "your_cloud_name") {
         return Promise.reject(new Error("Cloudinaryのクラウド名が設定されていません"));
@@ -3060,8 +3173,13 @@
         fd.append("file", file);
         fd.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
         fd.append("folder", folder);
+        // 画像・動画はそれぞれのタイプ、PDFや他ファイルは raw/upload を使用
+        // raw/upload は直接ダウンロード可能でアクセス制限が image/upload より緩い
+        const resourceType = file.type.startsWith('image/') ? 'image'
+          : file.type.startsWith('video/') ? 'video'
+          : 'raw';
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`);
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${resourceType}/upload`);
         xhr.upload.addEventListener("progress", e => {
           if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
         });
@@ -3104,6 +3222,7 @@
 
     let lastMessagesData = [];
     let attachedFile = null;
+    let attachedKvFile = null; // KV アップロード済みファイル { url, name, type, size }
     let replyingToMessage = null;
     let currentPdfUrl = "";
     let currentPdfName = "";
@@ -3588,6 +3707,7 @@
         { id: "adminTabAllowedBtn", content: "adminTabAllowedContent", key: "allowed" },
         { id: "adminTabAdminsBtn", content: "adminTabAdminsContent", key: "admins" },
         { id: "adminTabListAdminsBtn", content: "adminTabListAdminsContent", key: "listAdmins" },
+        { id: "adminTabStorageBtn", content: "adminTabStorageContent", key: "storage" },
       ];
       tabs.forEach(t => {
         const btn = document.getElementById(t.id);
@@ -3603,10 +3723,12 @@
           cnt.classList.add("hidden");
         }
       });
+      if (tab === "storage") loadStorageStats();
     }
     document.getElementById("adminTabAllowedBtn").addEventListener("click", () => switchAdminTab("allowed"));
     document.getElementById("adminTabAdminsBtn").addEventListener("click", () => switchAdminTab("admins"));
     document.getElementById("adminTabListAdminsBtn").addEventListener("click", () => switchAdminTab("listAdmins"));
+    document.getElementById("adminTabStorageBtn").addEventListener("click", () => switchAdminTab("storage"));
 
     // メールアドレスのアバター頭文字取得
     function emailInitial(email) {
@@ -3713,6 +3835,123 @@
     });
 
     // 許可リスト追加
+    // ストレージ統計
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function loadStorageStats() {
+      const kvBar = document.getElementById('kvUsageBar');
+      const kvText = document.getElementById('kvUsageText');
+      const kvCount = document.getElementById('kvFileCount');
+      const cdnBar = document.getElementById('cloudinaryUsageBar');
+      const cdnText = document.getElementById('cloudinaryUsageText');
+      const cdnLimit = document.getElementById('cloudinaryLimitText');
+      const cdnCount = document.getElementById('cloudinaryResourceCount');
+      if (!kvText) return;
+      kvText.textContent = '読み込み中...';
+      cdnText.textContent = '読み込み中...';
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/api/admin/storageStats`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        // KV
+        const kvLimitBytes = 1 * 1024 * 1024 * 1024;
+        const kvUsed = data.kv?.totalBytes || 0;
+        const kvPct = Math.min((kvUsed / kvLimitBytes) * 100, 100);
+        kvBar.style.width = kvPct + '%';
+        kvText.textContent = formatBytes(kvUsed) + ' / 1 GB';
+        kvCount.textContent = (data.kv?.fileCount || 0) + ' ファイル';
+        // Cloudinary
+        if (data.cloudinary) {
+          const cdnUsed = data.cloudinary.storageBytes || 0;
+          const cdnMax = data.cloudinary.storageLimitBytes || 26843545600;
+          const cdnPct = Math.min((cdnUsed / cdnMax) * 100, 100);
+          cdnBar.style.width = cdnPct + '%';
+          cdnText.textContent = formatBytes(cdnUsed) + ' / ' + formatBytes(cdnMax);
+          cdnLimit.textContent = formatBytes(cdnMax);
+          cdnCount.textContent = (data.cloudinary.resources || 0) + ' リソース';
+        } else {
+          const err = data.cloudinaryError || '';
+          if (err === 'no_credentials') {
+            cdnText.textContent = 'APIキー未設定';
+          } else if (err.startsWith('api_error:401')) {
+            cdnText.textContent = 'APIキーまたはシークレットが正しくありません';
+            console.error('[storageStats] Cloudinary 401:', err);
+          } else if (err.startsWith('api_error:403')) {
+            cdnText.textContent = 'APIキーの権限が不足しています';
+            console.error('[storageStats] Cloudinary 403 - APIキーにread権限が必要です:', err);
+          } else if (err) {
+            cdnText.textContent = 'エラー: ' + err;
+            console.error('[storageStats] Cloudinary error:', err);
+          } else {
+            cdnText.textContent = '取得に失敗しました';
+          }
+          cdnLimit.textContent = '—';
+          cdnCount.textContent = '';
+        }
+      } catch (e) {
+        kvText.textContent = '取得に失敗しました';
+        cdnText.textContent = '取得に失敗しました';
+        console.error('[storageStats] fetch error:', e);
+      }
+    }
+
+    document.getElementById('refreshStorageStatsBtn').addEventListener('click', loadStorageStats);
+
+    document.getElementById('bulkDeleteAllFilesBtn').addEventListener('click', async () => {
+      const first = await showCustomConfirm('KVとCloudinaryの全ファイルを削除しますか？', '削除する', 'キャンセル', 'この操作は取り消せません。');
+      if (!first) return;
+      const second = await showCustomConfirm('本当によろしいですか？', '全て削除', 'キャンセル', '全ての添付ファイルのURLが無効になります。');
+      if (!second) return;
+      const btn = document.getElementById('bulkDeleteAllFilesBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 削除中...';
+      try {
+        const res = await fetch(`${WORKER_BASE_URL}/api/admin/bulkDeleteFiles`, { method: 'DELETE' });
+        if (res.ok) {
+          const data = await res.json();
+          // ファイルを参照するFirestoreメッセージも削除
+          btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> メッセージ削除中...';
+          let msgDeleted = 0;
+          try {
+            const kvWorkerPattern = new RegExp(WORKER_BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/api/file/[A-Za-z0-9_]+');
+            const serversSnap = await getDocs(collection(db, `artifacts/${appId}/servers`));
+            for (const serverDoc of serversSnap.docs) {
+              const roomsSnap = await getDocs(collection(db, `artifacts/${appId}/servers/${serverDoc.id}/rooms`));
+              for (const roomDoc of roomsSnap.docs) {
+                const msgsSnap = await getDocs(collection(db, `artifacts/${appId}/servers/${serverDoc.id}/rooms/${roomDoc.id}/messages`));
+                for (const msgDoc of msgsSnap.docs) {
+                  const d = msgDoc.data();
+                  const hasKvFile = d.kvFileUrl || (d.text && kvWorkerPattern.test(d.text));
+                  const hasCloudinaryFile = d.fileData && d.fileData.includes('res.cloudinary.com');
+                  if (hasKvFile || hasCloudinaryFile) {
+                    await deleteDoc(msgDoc.ref);
+                    msgDeleted++;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[bulkDelete] Message cleanup error:', e);
+          }
+          alertMessage(`削除完了: KV ${data.kvDeleted} ファイル、メッセージ ${msgDeleted} 件`, 'success');
+          loadStorageStats();
+        } else {
+          alertMessage('削除に失敗しました', 'error');
+        }
+      } catch (e) {
+        alertMessage('削除に失敗しました: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt"></i> 全ファイルを一括削除';
+      }
+    });
+
     addAllowedEmailButton.addEventListener("click", async () => {
       const email = newAllowedEmailInput.value.trim();
       if (!email) return;
@@ -3855,7 +4094,21 @@
       document.querySelectorAll('#settingsModal .settings-content-section').forEach(s => s.classList.remove('active'));
       const nb = document.getElementById('snav-' + tab);
       if (nb) nb.classList.add('active');
-      const smap = { profile:'profileSection', settings:'settingsSection', admin:'adminNavSection' };
+      const smap = { profile:'profileSection', settings:'settingsSection', admin:'adminNavSection', appinfo:'appinfoSection' };
+      if (tab === 'appinfo') {
+        const verEl = document.getElementById('appInfoVersion');
+        if (verEl) {
+          if (_appVersion) {
+            verEl.textContent = 'v' + _appVersion;
+          } else {
+            verEl.textContent = '読込中…';
+            fetch('/version.json', { cache: 'no-cache' })
+              .then(r => r.json())
+              .then(d => { verEl.textContent = 'v' + (d.version || '—'); _appVersion = d.version; })
+              .catch(() => { verEl.textContent = '—'; });
+          }
+        }
+      }
       const sec = document.getElementById(smap[tab] || 'profileSection');
       if (sec) sec.classList.add('active');
       if (tab === 'admin') {
@@ -3927,6 +4180,20 @@
       const pe = document.getElementById('pcNotifEmpty');
       if (me) me.style.display = count > 0 ? 'none' : 'block';
       if (pe) pe.style.display = count > 0 ? 'none' : 'block';
+
+      // モバイル通知タブのバッジ更新
+      const mobileNotifTab = document.getElementById('mobileTabNotif');
+      if (mobileNotifTab) {
+        let nb = mobileNotifTab.querySelector('.mobile-notif-dot');
+        if (count > 0) {
+          if (!nb) { nb = document.createElement('span'); nb.className = 'mobile-notif-dot'; mobileNotifTab.appendChild(nb); }
+          nb.style.display = 'block';
+        } else if (nb) {
+          nb.style.display = 'none';
+        }
+      }
+
+      if (typeof updateServerCardDots === 'function') updateServerCardDots();
     }
     window.goToRoom = function(rid) {
       const pModal = document.getElementById('pcNotifModal');
@@ -3937,7 +4204,7 @@
     };
 
     window.openMobileDetail = function(type) {
-      const m = { profile:'mobileDetailProfile', notif:'mobileDetailNotif', admin:'mobileDetailAdmin' };
+      const m = { profile:'mobileDetailProfile', notif:'mobileDetailNotif', admin:'mobileDetailAdmin', appinfo:'mobileDetailAppInfo' };
       const el = document.getElementById(m[type]);
       if (el) {
         if (type === 'admin') {
@@ -3947,6 +4214,22 @@
              container.appendChild(shared);
              shared.classList.remove('hidden');
            }
+        }
+        if (type === 'appinfo') {
+          const verEl = document.getElementById('mobileAppInfoVersion');
+          if (verEl) {
+            if (_appVersion) {
+              verEl.textContent = _appVersion;
+            } else {
+              fetch('/version.json', { cache: 'no-cache' })
+                .then(r => r.json())
+                .then(d => {
+                  _appVersion = d.version || null;
+                  verEl.textContent = _appVersion || '—';
+                })
+                .catch(() => { verEl.textContent = '取得失敗'; });
+            }
+          }
         }
         el.classList.add('active');
       }
@@ -4720,15 +5003,19 @@
       function appendServerCard(server, idx) {
         const card = document.createElement("div");
         card.className = "server-card anim-card";
+        card.dataset.serverId = server.id;
         card.style.animationDelay = `${idx * 55}ms`;
         const isMine = server.serverAdmins && server.serverAdmins.includes(userId);
         const memberCount = Number.isFinite(server.memberCount) ? server.memberCount : (server.joinedUsers ? server.joinedUsers.length : 0);
+        let hasUnread = false;
+        try { const su = JSON.parse(localStorage.getItem('covo_server_unread') || '{}'); hasUnread = !!su[server.id]; } catch(e) {}
         card.innerHTML = `
             <div class="server-card-icon"><i class="fas fa-server"></i></div>
             <div class="server-card-info"><div class="server-card-name">${escapeHtml(server.name || server.id)}</div>
             <div class="server-card-meta"><i class="fas fa-users mr-1"></i>${memberCount} メンバー</div></div>
             ${isMine ? '<span class="server-card-admin-badge"><i class="fas fa-crown mr-1"></i>管理者</span>' : ''}
             ${isAdmin && !isMine && (server.joinedUsers || []).includes(userId) ? '<span class="server-card-admin-badge"><i class="fas fa-crown mr-1"></i>管理者</span>' : ''}
+            ${hasUnread ? '<span class="server-card-unread-dot"></span>' : ''}
           `;
         let lpTimer, lpTriggered = false;
         card.addEventListener("click", () => { if (lpTriggered) { lpTriggered = false; return; } enterServer(server.id, server); });
@@ -4813,6 +5100,8 @@
       currentServerId = serverId;
       currentServerData = serverData;
       try { const rm = JSON.parse(localStorage.getItem('covo_recent_servers') || '{}'); rm[serverId] = Date.now(); localStorage.setItem('covo_recent_servers', JSON.stringify(rm)); } catch(e) {}
+      // サーバーに入ったら未読フラグをクリア
+      try { const su = JSON.parse(localStorage.getItem('covo_server_unread') || '{}'); delete su[serverId]; localStorage.setItem('covo_server_unread', JSON.stringify(su)); } catch(e) {}
 
       document.getElementById("serverListScreen").classList.add("hidden");
       appContainer.classList.remove("hidden");
@@ -5079,20 +5368,20 @@
           const badgeSpan = document.createElement("span");
           badgeSpan.className = "unread-badge";
           badgeSpan.id = `unread-badge-${docSnap.id}`;
-          badgeSpan.textContent = "!";
-          badgeSpan.style.width = "12px"; badgeSpan.style.height = "12px"; badgeSpan.style.padding = "0"; badgeSpan.style.color = "transparent"; badgeSpan.style.overflow = "hidden";
-          badgeSpan.style.display = isUnread ? "flex" : "none";
+          badgeSpan.style.display = isUnread ? "block" : "none";
 
           div.appendChild(nameDiv);
           div.appendChild(badgeSpan);
           roomList.appendChild(div);
-
-          if (!unreadListeners[docSnap.id]) {
-            
-            
-          }
         });
 
+        // サーバー単位の未読状態をlocalStorageに保存（サーバーカードの通知ドット用）
+        const serverHasUnread = snapshot.docs.some(d => (unreadCounts[d.id] || 0) > 0);
+        try {
+          const su = JSON.parse(localStorage.getItem('covo_server_unread') || '{}');
+          su[currentServerId] = serverHasUnread;
+          localStorage.setItem('covo_server_unread', JSON.stringify(su));
+        } catch(e) {}
       }
 
       let isRoomsFirst = true;
@@ -5158,8 +5447,23 @@
       const badge = document.getElementById(`unread-badge-${roomId}`);
       if (!badge) return;
       const count = unreadCounts[roomId] || 0;
-      badge.textContent = count > 99 ? "99+" : count;
-      badge.style.display = (count > 0 && roomId !== currentRoomId) ? "flex" : "none";
+      badge.style.display = (count > 0 && roomId !== currentRoomId) ? "block" : "none";
+    }
+
+    function updateServerCardDots() {
+      try {
+        const su = JSON.parse(localStorage.getItem('covo_server_unread') || '{}');
+        document.querySelectorAll('.server-card[data-server-id]').forEach(card => {
+          const sid = card.dataset.serverId;
+          let dot = card.querySelector('.server-card-unread-dot');
+          if (su[sid]) {
+            if (!dot) { dot = document.createElement('span'); dot.className = 'server-card-unread-dot'; card.appendChild(dot); }
+            dot.style.display = 'block';
+          } else if (dot) {
+            dot.style.display = 'none';
+          }
+        });
+      } catch(e) {}
     }
 
     async function loadOlderMessages() {
@@ -5947,7 +6251,7 @@
 
     async function sendMessage() {
       const text = messageInput.value.trim();
-      if ((!text && !attachedFile) || !currentRoomId) return;
+      if ((!text && !attachedFile && !attachedKvFile) || !currentRoomId) return;
       clearTimeout(typingTimeout);
       isCurrentlyTyping = false;
       setTypingStatus(false);
@@ -5956,9 +6260,12 @@
       const progressFill = document.getElementById("uploadProgressFill");
       const progressText = document.getElementById("uploadProgressText");
 
-      if (!attachedFile) loadingOverlay.classList.remove("hidden");
+      if (!attachedFile && !attachedKvFile) loadingOverlay.classList.remove("hidden");
       try {
         const data = { text, senderId: userId, senderNickname: currentServerNickname || userNickname, timestamp: serverTimestamp() };
+        if (attachedKvFile) {
+          Object.assign(data, { kvFileUrl: attachedKvFile.url, fileName: attachedKvFile.name, fileType: attachedKvFile.type, fileSize: attachedKvFile.size });
+        }
         if (attachedFile) {
           progressBar.classList.remove("hidden");
           progressFill.style.width = "0%";
@@ -5987,7 +6294,7 @@
         await updateDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}`), { 
           lastMessageAt: data.timestamp, 
           lastMessageSender: userId, 
-          lastMessageText: text || (attachedFile ? '（ファイル）' : '') 
+          lastMessageText: text || (attachedFile ? '（画像）' : attachedKvFile ? '（ファイル）' : '')
         });
 
         // FCMプッシュ通知（サーバーメンバー全員に送信）
@@ -6005,7 +6312,7 @@
                 body: JSON.stringify({
                   receiverIds,
                   title: `${serverName} › #${roomName}`,
-                  body: `${userNickname}: ${text || (attachedFile ? '（ファイル）' : '')}`,
+                  body: `${userNickname}: ${text || (attachedFile ? '（画像）' : attachedKvFile ? '（ファイル）' : '')}`,
                   roomId: currentRoomId,
                   appId: appId,
                   senderId: userId
@@ -6028,6 +6335,8 @@
         alertMessage("送信に失敗しました", "error");
       } finally {
         loadingOverlay.classList.add("hidden");
+        progressBar.classList.add("hidden");
+        progressFill.style.width = "0%";
       }
     }
     const imageLightbox = document.getElementById('imageLightbox');
@@ -6101,26 +6410,38 @@
       }
     });
     function updateFilePreview() {
+      const progressBar = document.getElementById("uploadProgressBar");
+      const progressFill = document.getElementById("uploadProgressFill");
       if (attachedFile) {
         const sizeStr = attachedFile.size >= 1024 * 1024
           ? `${(attachedFile.size / (1024 * 1024)).toFixed(1)} MB`
           : `${(attachedFile.size / 1024).toFixed(1)} KB`;
         filePreviewName.textContent = `${attachedFile.name} (${sizeStr})`;
         filePreviewContainer.classList.remove("hidden");
-        document.getElementById("uploadProgressBar").classList.add("hidden");
-        document.getElementById("uploadProgressFill").style.width = "0%";
+        progressBar.classList.add("hidden");
+        progressFill.style.width = "0%";
+      } else if (attachedKvFile) {
+        const sizeStr = attachedKvFile.size >= 1024 * 1024
+          ? `${(attachedKvFile.size / (1024 * 1024)).toFixed(1)} MB`
+          : `${(attachedKvFile.size / 1024).toFixed(1)} KB`;
+        filePreviewName.innerHTML = `<i class="fas fa-paperclip mr-1 text-gray-400"></i>${attachedKvFile.name} (${sizeStr})`;
+        filePreviewContainer.classList.remove("hidden");
+        progressBar.classList.add("hidden");
+        progressFill.style.width = "0%";
       } else {
         filePreviewContainer.classList.add("hidden");
+        progressBar.classList.add("hidden");
+        progressFill.style.width = "0%";
       }
     }
     clearFileButton.addEventListener("click", clearAttachedFile);
-    function clearAttachedFile() { attachedFile = null; updateFilePreview(); }
+    function clearAttachedFile() { attachedFile = null; attachedKvFile = null; updateFilePreview(); }
 
     // --- 送信ボタン ---
     const sendMessageButton = document.getElementById("sendMessageButton");
     sendMessageButton.addEventListener("click", sendMessage);
 
-    // --- ファイル添付ボタン ---
+    // --- ファイル添付ボタン（画像→Cloudinary添付 / それ以外→catbox.moe URLリンク化） ---
     const fileAttachButton = document.getElementById("fileAttachButton");
     const fileAttachInput = document.getElementById("fileAttachInput");
     fileAttachButton.disabled = true;
@@ -6128,15 +6449,37 @@
       if (!currentRoomId) return;
       fileAttachInput.click();
     });
-    fileAttachInput.addEventListener("change", (e) => {
+
+    async function handleNonImageUpload(f) {
+      if (f.size > 25 * 1024 * 1024) { alertMessage("ファイルは25MBまでです", "error"); return; }
+      fileAttachButton.disabled = true;
+      fileAttachButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      try {
+        const url = await uploadToExternalService(f);
+        attachedKvFile = { url, name: f.name, type: f.type || 'application/octet-stream', size: f.size };
+        updateFilePreview();
+        messageInput.focus();
+        alertMessage(`ファイルを添付しました: ${f.name}`, "success");
+      } catch (err) {
+        alertMessage('アップロードに失敗しました: ' + err.message, "error");
+      } finally {
+        fileAttachButton.disabled = !currentRoomId;
+        fileAttachButton.innerHTML = '<i class="fas fa-paperclip"></i>';
+      }
+    }
+
+    fileAttachInput.addEventListener("change", async (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      if (!checkFileAllowed(f)) { fileAttachInput.value = ""; return; }
-      const MAX = f.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-      if (f.size > MAX) { alertMessage(f.type.startsWith('video/') ? "動画は100MBまでです" : "ファイルは10MBまでです", "error"); fileAttachInput.value = ""; return; }
-      attachedFile = { file: f, name: f.name, type: f.type, size: f.size };
-      updateFilePreview();
       fileAttachInput.value = "";
+      if (!checkFileAllowed(f)) return;
+      if (f.type.startsWith('image/')) {
+        if (f.size > 10 * 1024 * 1024) { alertMessage("画像は10MBまでです", "error"); return; }
+        attachedFile = { file: f, name: f.name, type: f.type, size: f.size };
+        updateFilePreview();
+      } else {
+        await handleNonImageUpload(f);
+      }
     });
 
     // --- ドラッグ＆ドロップ ---
@@ -6152,16 +6495,19 @@
       if (dragCounter <= 0) { dragCounter = 0; dropOverlay.classList.remove("active"); }
     });
     messageInputArea.addEventListener("dragover", (e) => e.preventDefault());
-    messageInputArea.addEventListener("drop", (e) => {
+    messageInputArea.addEventListener("drop", async (e) => {
       e.preventDefault(); dragCounter = 0;
       dropOverlay.classList.remove("active");
       const f = e.dataTransfer.files[0];
       if (!f) return;
       if (!checkFileAllowed(f)) return;
-      const MAX = f.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
-      if (f.size > MAX) { alertMessage(f.type.startsWith('video/') ? "動画は100MBまでです" : "ファイルは10MBまでです", "error"); return; }
-      attachedFile = { file: f, name: f.name, type: f.type, size: f.size };
-      updateFilePreview();
+      if (f.type.startsWith('image/')) {
+        if (f.size > 10 * 1024 * 1024) { alertMessage("画像は10MBまでです", "error"); return; }
+        attachedFile = { file: f, name: f.name, type: f.type, size: f.size };
+        updateFilePreview();
+      } else {
+        await handleNonImageUpload(f);
+      }
     });
 
     // --- メンションボタン ---
@@ -6304,24 +6650,9 @@
           video.style.maxHeight = '250px';
           messageElement.appendChild(video);
         } else if (message.fileType === 'application/pdf' && message.fileData.startsWith('http')) {
-          // PDFサムネイル（Cloudinary page_1プレビュー）
           const pdfWrapper = document.createElement('div');
           pdfWrapper.className = 'mt-2 cursor-pointer inline-block';
-          const thumbUrl = message.fileData.replace('/upload/', '/upload/pg_1,w_240,h_320,c_fit,f_jpg/');
-          const thumbImg = document.createElement('img');
-          thumbImg.alt = message.fileName;
-          thumbImg.className = 'rounded-lg border border-gray-200 block';
-          thumbImg.style.maxWidth = '160px';
-          thumbImg.loading = 'lazy';
-          // サムネイル読み込み失敗時はPDFアイコンにフォールバック
-          thumbImg.onerror = () => {
-            thumbImg.style.display = 'none';
-            const fallback = document.createElement('div');
-            fallback.className = 'w-20 h-24 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1';
-            fallback.innerHTML = '<i class="fas fa-file-pdf text-red-400 text-2xl"></i><span class="text-xs text-gray-400">PDF</span>';
-            pdfWrapper.insertBefore(fallback, thumbImg);
-          };
-          thumbImg.src = thumbUrl;
+          const isRawPdf = message.fileData.includes('/raw/upload/');
           const pdfLabel = document.createElement('div');
           pdfLabel.className = 'text-xs text-gray-500 mt-1 flex items-center gap-1';
           const safeName = document.createElement('span');
@@ -6330,9 +6661,32 @@
           safeName.textContent = message.fileName;
           pdfLabel.innerHTML = '<i class="fas fa-file-pdf text-red-500"></i> ';
           pdfLabel.appendChild(safeName);
-          pdfWrapper.appendChild(thumbImg);
+          if (!isRawPdf) {
+            // 旧 image/upload 型: サムネイル生成を試みてフォールバック
+            const thumbUrl = message.fileData.replace('/upload/', '/upload/pg_1,w_240,h_320,c_fit,f_jpg/');
+            const thumbImg = document.createElement('img');
+            thumbImg.alt = message.fileName;
+            thumbImg.className = 'rounded-lg border border-gray-200 block';
+            thumbImg.style.maxWidth = '160px';
+            thumbImg.loading = 'lazy';
+            thumbImg.onerror = () => {
+              thumbImg.style.display = 'none';
+              const fallback = document.createElement('div');
+              fallback.className = 'w-20 h-24 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1';
+              fallback.innerHTML = '<i class="fas fa-file-pdf text-red-400 text-2xl"></i><span class="text-xs text-gray-400">PDF</span>';
+              pdfWrapper.insertBefore(fallback, thumbImg);
+            };
+            thumbImg.src = thumbUrl;
+            pdfWrapper.appendChild(thumbImg);
+          } else {
+            // raw/upload 型: サムネイル変換不可 → PDFアイコンを直接表示
+            const icon = document.createElement('div');
+            icon.className = 'w-20 h-24 rounded-lg border border-gray-200 bg-gray-50 flex flex-col items-center justify-center gap-1';
+            icon.innerHTML = '<i class="fas fa-file-pdf text-red-400 text-2xl"></i><span class="text-xs text-gray-400">PDF</span>';
+            pdfWrapper.appendChild(icon);
+          }
           pdfWrapper.appendChild(pdfLabel);
-          pdfWrapper.addEventListener('click', () => downloadFile(message.fileData, message.fileName, 'application/pdf'));
+          pdfWrapper.addEventListener('click', () => openPdfLightbox(message.fileData, message.fileName));
           messageElement.appendChild(pdfWrapper);
         } else {
           const fileAttachmentDiv = document.createElement("div");
@@ -6349,6 +6703,43 @@
           messageElement.appendChild(fileAttachmentDiv);
         }
       }
+      // KV ファイル添付カード
+      if (message.kvFileUrl && message.fileName) {
+        const kvDiv = document.createElement("div");
+        kvDiv.className = `mt-2 p-2.5 rounded-xl border ${isMyMessage ? "border-gray-400 bg-gray-300" : "border-gray-200 bg-gray-50"} flex items-center gap-2.5 cursor-pointer select-none`;
+        const iconWrap = document.createElement("div");
+        iconWrap.className = "flex-shrink-0 w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center";
+        iconWrap.innerHTML = '<i class="fas fa-paperclip text-gray-500 text-sm"></i>';
+        const infoDiv = document.createElement("div");
+        infoDiv.className = "flex-1 min-w-0";
+        const nameSpan = document.createElement("div");
+        nameSpan.className = "text-sm font-semibold text-gray-800 truncate";
+        nameSpan.textContent = message.fileName;
+        const metaSpan = document.createElement("div");
+        metaSpan.className = "text-xs text-gray-400";
+        if (message.fileSize) {
+          metaSpan.textContent = message.fileSize >= 1048576
+            ? `${(message.fileSize / 1048576).toFixed(1)} MB`
+            : `${(message.fileSize / 1024).toFixed(1)} KB`;
+        }
+        infoDiv.appendChild(nameSpan);
+        infoDiv.appendChild(metaSpan);
+        const dlIcon = document.createElement("div");
+        dlIcon.className = "flex-shrink-0 text-gray-400";
+        dlIcon.innerHTML = '<i class="fas fa-download text-sm"></i>';
+        kvDiv.appendChild(iconWrap);
+        kvDiv.appendChild(infoDiv);
+        kvDiv.appendChild(dlIcon);
+        kvDiv.addEventListener("click", () => {
+          const a = document.createElement('a');
+          a.href = message.kvFileUrl;
+          a.download = message.fileName;
+          a.target = '_blank';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        });
+        messageElement.appendChild(kvDiv);
+      }
+
       const timestampSpan = document.createElement("span");
       timestampSpan.className = `text-xs text-gray-500 mt-1 ${isMyMessage ? "text-right" : "text-left"}`;
       if (message.timestamp && message.timestamp.toDate) {
@@ -6574,27 +6965,120 @@
       }
       messageContextMenu.classList.add("hidden");
     });
+    function extractCloudinaryPublicId(url, resourceType) {
+      const uploadIdx = url.indexOf('/upload/');
+      if (uploadIdx === -1) return null;
+      let afterUpload = url.substring(uploadIdx + 8).split('?')[0].split('#')[0];
+      afterUpload = afterUpload.replace(/^v\d+\//, '');
+      if (resourceType !== 'raw') afterUpload = afterUpload.replace(/\.[^.]+$/, '');
+      return afterUpload || null;
+    }
+    function extractCloudinaryResourceType(url) {
+      const m = url.match(/cloudinary\.com\/[^/]+\/(image|raw|video)\/upload\//);
+      return m ? m[1] : 'image';
+    }
+
     deleteMessageButton.addEventListener("click", async () => {
-      if (selectedMessageForContext && (selectedMessageForContext.senderId === userId || isAdmin || (currentServerData && currentServerData.serverAdmins && currentServerData.serverAdmins.includes(userId)))) {
-        try {
-          await deleteDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`, selectedMessageForContext.id));
-          
-          // 古いメッセージ（onSnapshot監視外）を削除した場合、ローカルのキャッシュからも削除して再描画
-          allLoadedMessages = allLoadedMessages.filter(m => m.id !== selectedMessageForContext.id);
-          lastMessagesData = [...allLoadedMessages];
-          messagesIndexMap = {};
-          lastMessagesData.forEach((m, i) => messagesIndexMap[m.id] = i);
-          // 再描画
-          renderMessagesWithReadReceipts();
-          
-          alertMessage("削除しました", "success");
-        } catch (e) {
-          alertMessage("削除に失敗しました", "error");
-        }
-      } else {
-        alertMessage("権限がありません", "warning");
-      }
       messageContextMenu.classList.add("hidden");
+      if (!selectedMessageForContext) return;
+      const canDelete = selectedMessageForContext.senderId === userId || isAdmin ||
+        (currentServerData && currentServerData.serverAdmins && currentServerData.serverAdmins.includes(userId));
+      if (!canDelete) { alertMessage("権限がありません", "warning"); return; }
+
+      const msgToDelete = selectedMessageForContext;
+      const isServerAdmin = !!(currentServerData && currentServerData.serverAdmins && currentServerData.serverAdmins.includes(userId));
+      const forceDelete = (isAdmin || isServerAdmin) && msgToDelete.senderId !== userId;
+
+      // 1. KV ファイル削除（先行・失敗でメッセージ削除中止）
+      // 1a. kvFileUrl フィールド（新形式）
+      if (msgToDelete.kvFileUrl) {
+        const m = msgToDelete.kvFileUrl.match(/\/api\/file\/([A-Za-z0-9_]+)/);
+        if (m) {
+          const fileKey = m[1];
+          const params = `userId=${encodeURIComponent(userId)}${forceDelete ? '&forceDelete=1' : ''}`;
+          try {
+            const res = await fetch(`${WORKER_BASE_URL}/api/file/${fileKey}?${params}`, { method: 'DELETE' });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              console.error('[deleteMessage] KV file delete failed (kvFileUrl):', fileKey, err);
+              alertMessage('添付ファイルの削除に失敗しました。メッセージは削除されませんでした。', 'error');
+              return;
+            }
+            console.log('[deleteMessage] KV file deleted (kvFileUrl):', fileKey);
+          } catch (e) {
+            console.error('[deleteMessage] KV file delete error (kvFileUrl):', fileKey, e);
+            alertMessage('添付ファイルの削除に失敗しました。メッセージは削除されませんでした。', 'error');
+            return;
+          }
+        }
+      }
+      // 1b. テキスト内の旧形式KV URL
+      if (msgToDelete.text) {
+        const kvPattern = new RegExp(WORKER_BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/api/file/([A-Za-z0-9_]+)', 'g');
+        const kvMatches = [...msgToDelete.text.matchAll(kvPattern)];
+        for (const match of kvMatches) {
+          const fileKey = match[1];
+          const params = `userId=${encodeURIComponent(userId)}${forceDelete ? '&forceDelete=1' : ''}`;
+          try {
+            const res = await fetch(`${WORKER_BASE_URL}/api/file/${fileKey}?${params}`, { method: 'DELETE' });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              console.error('[deleteMessage] KV file delete failed (text URL):', fileKey, err);
+              alertMessage('添付ファイルの削除に失敗しました。メッセージは削除されませんでした。', 'error');
+              return;
+            }
+            console.log('[deleteMessage] KV file deleted (text URL):', fileKey);
+          } catch (e) {
+            console.error('[deleteMessage] KV file delete error (text URL):', fileKey, e);
+            alertMessage('添付ファイルの削除に失敗しました。メッセージは削除されませんでした。', 'error');
+            return;
+          }
+        }
+      }
+
+      // 2. Cloudinary 画像削除（設定済みの場合のみ・失敗でメッセージ削除中止）
+      if (msgToDelete.fileData && msgToDelete.fileData.includes('res.cloudinary.com')) {
+        const resType = extractCloudinaryResourceType(msgToDelete.fileData);
+        const pubId = extractCloudinaryPublicId(msgToDelete.fileData, resType);
+        if (pubId) {
+          try {
+            const res = await fetch(
+              `${WORKER_BASE_URL}/api/cloudinaryFile?publicId=${encodeURIComponent(pubId)}&resourceType=${resType}`,
+              { method: 'DELETE' }
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              if (data.error === 'no_credentials') {
+                console.warn('[deleteMessage] Cloudinary credentials not set in Worker, skipping image cleanup');
+              } else {
+                console.error('[deleteMessage] Cloudinary delete failed:', pubId, data);
+                alertMessage('画像の削除に失敗しました。メッセージは削除されませんでした。', 'error');
+                return;
+              }
+            } else {
+              console.log('[deleteMessage] Cloudinary file deleted:', pubId, data.result);
+            }
+          } catch (e) {
+            console.error('[deleteMessage] Cloudinary delete error:', pubId, e);
+            alertMessage('画像の削除に失敗しました。メッセージは削除されませんでした。', 'error');
+            return;
+          }
+        }
+      }
+
+      // 3. Firestore メッセージ削除
+      try {
+        await deleteDoc(doc(db, `artifacts/${appId}/servers/${currentServerId}/rooms/${currentRoomId}/messages`, msgToDelete.id));
+        allLoadedMessages = allLoadedMessages.filter(m => m.id !== msgToDelete.id);
+        lastMessagesData = [...allLoadedMessages];
+        messagesIndexMap = {};
+        lastMessagesData.forEach((m, i) => messagesIndexMap[m.id] = i);
+        renderMessagesWithReadReceipts();
+        alertMessage("削除しました", "success");
+      } catch (e) {
+        console.error('[deleteMessage] Firestore delete failed:', msgToDelete.id, e);
+        alertMessage("削除に失敗しました", "error");
+      }
     });
 
     messagesDisplay.addEventListener("dblclick", (e) => {
@@ -6626,9 +7110,50 @@
       }
     });
 
+    // iOS/Safari 判定
+    const _isIOSSafari = (() => {
+      const ua = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+      // iPad on iOS 13+ reports as "Macintosh" but has touch
+      const isIPadOS = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1;
+      return isIOS || isIPadOS || isSafari;
+    })();
+
     function downloadFile(fileData, fileName, mimeType) {
       if (fileData && fileData.startsWith('http')) {
-        // fetchでblobとして取得→ローカルURLでダウンロード（ファイル名を正しく保持）
+        if (fileData.includes('res.cloudinary.com')) {
+          // Cloudinary URL はブラウザからの直接アクセスが制限される場合があるため
+          // Cloudflare Worker プロキシ経由でダウンロードする
+          const proxyUrl = `${WORKER_BASE_URL}/api/download?url=${encodeURIComponent(fileData)}&name=${encodeURIComponent(fileName)}`;
+          if (_isIOSSafari) {
+            // iOS Safari: プロキシURL を新タブで開く（Content-Disposition: attachment でダウンロード）
+            window.open(proxyUrl, '_blank');
+            return;
+          }
+          fetch(proxyUrl)
+            .then(res => {
+              if (!res.ok) throw new Error(`Proxy error: ${res.status}`);
+              return res.blob();
+            })
+            .then(blob => {
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 60000);
+            })
+            .catch(() => window.open(fileData, '_blank'));
+          return;
+        }
+        // 非Cloudinary HTTP URL
+        if (_isIOSSafari) {
+          window.open(fileData, '_blank');
+          return;
+        }
         fetch(fileData, { mode: 'cors' })
           .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -6644,10 +7169,7 @@
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 60000);
           })
-          .catch(() => {
-            // CORSエラー等のフォールバック: 別タブで開く
-            window.open(fileData, '_blank');
-          });
+          .catch(() => window.open(fileData, '_blank'));
         return;
       }
       // base64フォールバック（旧データ互換）
@@ -6667,6 +7189,85 @@
         link.click();
         document.body.removeChild(link);
       } catch (e) { console.error(e); }
+    }
+
+    function closePdfLightbox() {
+      const lightbox = document.getElementById('pdfLightbox');
+      const iframe = document.getElementById('pdfLightboxIframe');
+      if (lightbox) lightbox.style.display = 'none';
+      if (iframe) iframe.src = '';
+    }
+
+    // PDFライトボックスを開く
+    function openPdfLightbox(url, fileName) {
+      const lightbox = document.getElementById('pdfLightbox');
+      const iframe = document.getElementById('pdfLightboxIframe');
+      const nameEl = document.getElementById('pdfLightboxName');
+      const dlBtn = document.getElementById('pdfLightboxDownload');
+      const closeBtn = document.getElementById('pdfLightboxClose');
+
+      nameEl.textContent = fileName;
+
+      // iOS Safari は iframe PDF 表示が不安定 → 直接タブで開く
+      if (_isIOSSafari) {
+        window.open(url, '_blank');
+        return;
+      }
+
+      iframe.src = '';
+      lightbox.style.display = 'flex';
+
+      // エラーUI準備（再表示時に重複しないよう既存を削除）
+      const contentArea = lightbox.querySelector('div:last-child');
+      contentArea.style.position = 'relative';
+      const existingErr = contentArea.querySelector('.pdf-error-msg');
+      if (existingErr) existingErr.remove();
+
+      const safeUrl = url.replace(/'/g, "\\'");
+      const errorMsg = document.createElement('div');
+      errorMsg.className = 'pdf-error-msg';
+      errorMsg.style.cssText = 'display:none;position:absolute;inset:0;background:#1f2937;color:white;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:1;';
+      errorMsg.innerHTML = `<i class="fas fa-exclamation-circle text-red-400 text-4xl"></i><p class="text-sm text-gray-300">このPDFはプレビューできません</p><button onclick="window.open('${safeUrl}','_blank')" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg">別タブで開く</button>`;
+      contentArea.appendChild(errorMsg);
+
+      const isRaw = url.includes('/raw/upload/');
+      // 常にWorkerプロキシ経由（raw/image両方）
+      // Cloudinaryは直接アクセスも401になる場合があるためWorker経由で統一
+      const previewSrc = `${WORKER_BASE_URL}/api/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(fileName)}&preview=1`;
+
+      dlBtn.onclick = () => downloadFile(url, fileName, 'application/pdf');
+
+      let timeoutId = null;
+      closeBtn.onclick = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        errorMsg.remove();
+        closePdfLightbox();
+      };
+
+      // 両タイプともWorkerプロキシ経由でfetch事前チェック
+      // → iframe.onloadは401でも発火するため直接iframeに渡すと失敗を検知できない
+      console.info(`[PDF] ${isRaw ? 'raw/upload' : 'image/upload'}型 → Workerプロキシ経由でアクセスチェック中`);
+      fetch(previewSrc)
+        .then(async res => {
+          console.info(`[PDF] Workerレスポンス: HTTP ${res.status} ${res.statusText}`);
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            if (res.status === 401) {
+              console.warn('[PDF] 401 Unauthorized: Cloudinaryがこのファイルへのアクセスを制限しています。');
+              console.warn('[PDF] 原因:', errBody.reason || 'アップロードプリセットのアクセス設定が原因の可能性があります。Cloudinaryダッシュボードでプリセットのaccess_modeをpublicに変更してください。');
+            } else {
+              console.error(`[PDF] エラー (HTTP ${res.status}):`, errBody);
+            }
+            errorMsg.style.display = 'flex';
+          } else {
+            console.info('[PDF] アクセス成功 → iframeで表示します');
+            iframe.src = previewSrc;
+          }
+        })
+        .catch(err => {
+          console.error('[PDF] fetchネットワークエラー:', err);
+          errorMsg.style.display = 'flex';
+        });
     }
 
     function alertMessage(msg, type = "info") {
@@ -7395,7 +7996,7 @@
       // FCMが無効・非対応な環境（Safariなど）のためにフォールバックを用意する。
       if (!isTauri && !currentFcmToken && "Notification" in window && Notification.permission === "granted") {
         try {
-          const n = new Notification(title, { body, icon: '/icon-192x192.png?v=4' });
+          const n = new Notification(title, { body, icon: '/icon-192x192.png?v=5' });
           n.onclick = () => { window.focus(); n.close(); };
         } catch (e) { }
       }
@@ -7786,7 +8387,25 @@
   </div>
 
   <!-- PDFライトボックス -->
-  
+  <div id="pdfLightbox" class="fixed inset-0 z-[9998] flex-col bg-black/90" style="display:none; flex-direction:column;">
+    <div class="flex items-center justify-between px-3 bg-gray-900 flex-shrink-0"
+      style="padding-top: max(0.75rem, calc(0.75rem + env(safe-area-inset-top, 0px))); padding-bottom: 0.75rem;">
+      <button id="pdfLightboxClose"
+        class="text-gray-400 hover:text-white w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 flex-shrink-0">
+        <i class="fas fa-arrow-left text-lg"></i>
+      </button>
+      <span id="pdfLightboxName" class="text-white text-sm font-medium truncate flex-1 mx-3 text-center"></span>
+      <button id="pdfLightboxDownload"
+        class="text-gray-400 hover:text-white w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 flex-shrink-0">
+        <i class="fas fa-download"></i>
+      </button>
+    </div>
+    <div class="flex-1 overflow-hidden bg-gray-800" style="flex:1;">
+      <iframe id="pdfLightboxIframe" src="" class="w-full h-full border-0" style="width:100%;height:100%;border:none;"></iframe>
+    </div>
+  </div>
+
+
 
   <!-- アバター調整モーダル -->
   <div id="avatarCropModal" class="fixed inset-0 modal-overlay flex items-center justify-center hidden p-3" style="z-index: 9999;">
@@ -7902,6 +8521,11 @@
           <span class="mobile-settings-row-text">通知設定</span>
           <i class="fas fa-chevron-right mobile-settings-row-arrow"></i>
         </div>
+        <div class="mobile-settings-row" onclick="openMobileDetail('appinfo')">
+          <div class="mobile-settings-row-icon" style="background:#f3f4f6;color:#1f2937"><i class="fas fa-info-circle"></i></div>
+          <span class="mobile-settings-row-text">アプリ情報</span>
+          <i class="fas fa-chevron-right mobile-settings-row-arrow"></i>
+        </div>
       </div>
     </div>
     <div id="mobileAdminRowSection" class="mobile-settings-section hidden">
@@ -7967,6 +8591,30 @@
           <div class="mobile-settings-row-icon" style="background:#f3f4f6;color:#1f2937"><i class="fas fa-bell"></i></div>
           <span class="mobile-settings-row-text">ブラウザ通知</span>
           <label class="toggle-switch"><input type="checkbox" id="toggleBrowserNotifMobile"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Detail: App Info -->
+  <div class="mobile-settings-detail" id="mobileDetailAppInfo">
+    <div class="mobile-detail-header">
+      <div class="mobile-detail-back" onclick="closeMobileDetail('mobileDetailAppInfo')"><i class="fas fa-chevron-left"></i></div>
+      <span class="mobile-detail-title">アプリ情報</span>
+    </div>
+    <div style="padding:1.25rem">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:1.5rem 0 1.75rem;">
+        <img src="icon-192x192.png" alt="Covo" style="width:72px;height:72px;border-radius:18px;box-shadow:0 2px 12px rgba(0,0,0,0.12);" onerror="this.style.display='none'">
+        <div style="text-align:center;">
+          <div style="font-size:1.1rem;font-weight:700;color:#111827">Covo</div>
+          <div style="font-size:0.8rem;color:#9ca3af;margin-top:2px">チャットアプリ</div>
+        </div>
+      </div>
+      <div class="mobile-settings-group">
+        <div class="mobile-settings-row" style="cursor:default;">
+          <div class="mobile-settings-row-icon" style="background:#f3f4f6;color:#1f2937"><i class="fas fa-tag"></i></div>
+          <span class="mobile-settings-row-text">バージョン</span>
+          <span id="mobileAppInfoVersion" style="font-size:0.85rem;font-family:ui-monospace,Consolas,monospace;font-weight:700;color:#6b7280">—</span>
         </div>
       </div>
     </div>

@@ -5,13 +5,28 @@
   "hosting": {
     "public": "public",
     "predeploy": [
+      "node scripts/bump-version.js",
       "node_modules/.bin/tailwindcss.cmd -i tailwind.input.css -o public/styles.css --minify",
       "npm --prefix server run deploy"
+    ],
+    "postdeploy": [
+      "node scripts/print-deployed-version.js"
     ],
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/version.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
     ]
   }
 }

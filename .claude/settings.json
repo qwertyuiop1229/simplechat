@@ -1,7 +1,5 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(cargo check *)"
-    ]
+    "defaultMode":"auto"
   }
 }

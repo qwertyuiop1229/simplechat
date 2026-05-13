@@ -2,15 +2,22 @@ name = "simplechat-api"
 main = "src/index.js"
 compatibility_date = "2024-04-28"
 
+[[kv_namespaces]]
+binding = "FILES"
+id = "cb436609107e4f9e9aca4610dd4e100a"
+
 [vars]
 # Firebase REST APIの操作に必要な情報
 FIREBASE_PROJECT_ID = "simplechat-65a0d"
 FIREBASE_APP_ID = "simplechat-65a0d" # Firestoreの /artifacts/{appId} で使用する値
+CLOUDINARY_CLOUD_NAME = "dhmsyvwjd"
 
 # --- 以下の変数はシークレットとして設定する必要があります ---
 # wrangler secret put FIREBASE_API_KEY
 # wrangler secret put WORKER_AUTH_EMAIL
 # wrangler secret put WORKER_AUTH_PASSWORD
+# wrangler secret put CLOUDINARY_API_KEY     (管理者ストレージ統計・一括削除に必要)
+# wrangler secret put CLOUDINARY_API_SECRET  (管理者ストレージ統計・一括削除に必要)
 
 # [dev]
 # ローカル開発用のポート
