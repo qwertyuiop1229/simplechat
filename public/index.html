@@ -1736,18 +1736,19 @@
     #callButton {
       background: none;
       border: none;
-      color: #9ca3af;
+      color: #6b7280;
       cursor: pointer;
       padding: 6px;
+      margin-left: 8px;
       border-radius: 6px;
       font-size: 1rem;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s, background 0.15s;
+      transition: color 0.15s;
       -webkit-tap-highlight-color: transparent;
     }
-    #callButton:hover:not(:disabled) { color: white; background: rgba(255,255,255,0.08); }
+    #callButton:hover:not(:disabled) { color: #1f2937; }
     #callButton:disabled { opacity: 0.35; cursor: not-allowed; }
 
     #callPickerModal {
@@ -8280,9 +8281,12 @@
 
     function playCallRingSound() {
       stopCallRingSound();
-      const ring = () => {
+      try {
+        _ringCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch(_) { return; }
+      const playTone = () => {
+        if (!_ringCtx) return;
         try {
-          _ringCtx = new (window.AudioContext || window.webkitAudioContext)();
           const freqs = [880, 1100];
           freqs.forEach((freq, i) => {
             const osc = _ringCtx.createOscillator();
@@ -8299,8 +8303,8 @@
           });
         } catch(_) {}
       };
-      ring();
-      _ringRepeatHandle = setInterval(ring, 2000);
+      playTone();
+      _ringRepeatHandle = setInterval(playTone, 2000);
     }
 
     function stopCallRingSound() {
@@ -8361,16 +8365,16 @@
       if (!currentUserId) return;
       if (_callIncomingUnsub) { _callIncomingUnsub(); _callIncomingUnsub = null; }
       import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js').then(({ collection, query, where, onSnapshot }) => {
+        // calleeUid はトップレベルフィールドのため複合インデックス不要
         const q = query(
           collection(db, 'artifacts', appId, 'calls'),
-          where('callee.uid', '==', currentUserId),
-          where('status', '==', 'ringing')
+          where('calleeUid', '==', currentUserId)
         );
         _callIncomingUnsub = onSnapshot(q, (snap) => {
           snap.docChanges().forEach((change) => {
             if (change.type === 'added') {
               const data = change.doc.data();
-              if (!_callId) {
+              if (data.status === 'ringing' && !_callId) {
                 handleIncomingCall(change.doc.id, data.caller);
               }
             }
@@ -8390,9 +8394,10 @@
         list.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.4);">メンバーがいません</div>';
       } else {
         for (const uid of memberIds) {
-          const user = cachedUsers[uid] || {};
+          const user = cachedUsers.find(u => u.id === uid) || {};
           const name = escapeHtml(user.nickname || user.displayName || uid.slice(0, 8));
-          const avatar = user.avatarUrl ? `<img src="${escapeHtml(user.avatarUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />` : user.nickname?.[0]?.toUpperCase() || '?';
+          const avatarInitial = escapeHtml((user.nickname || user.displayName || '?')[0].toUpperCase());
+          const avatar = user.avatarUrl ? `<img src="${escapeHtml(user.avatarUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.textContent='${avatarInitial}'" />` : avatarInitial;
           const div = document.createElement('div');
           div.className = 'call-picker-item';
           div.innerHTML = `<div class="call-picker-avatar">${avatar}</div><div><div class="call-picker-name">${name}</div></div>`;
@@ -8423,10 +8428,11 @@
         return;
       }
 
-      const myUser = cachedUsers[currentUserId] || {};
+      const myUser = cachedUsers.find(u => u.id === currentUserId) || {};
       const callData = {
         caller: { uid: currentUserId, nickname: myUser.nickname || myUser.displayName || '', avatarUrl: myUser.avatarUrl || '' },
         callee: { uid, nickname: name, avatarUrl: avatar },
+        calleeUid: uid,
         status: 'ringing',
         createdAt: serverTimestamp()
       };
@@ -8496,7 +8502,7 @@
       const unsub = onSnapshot(doc(db, 'artifacts', appId, 'calls', callId), (snap) => {
         const d = snap.data();
         if (!d) { unsub(); endCall(true); return; }
-        if (d.status === 'ended' || d.status === 'missed') {
+        if (d.status === 'ended' || d.status === 'missed' || d.status === 'declined' || d.status === 'active') {
           unsub();
           stopCallRingSound();
           endCall(true);
@@ -8508,6 +8514,15 @@
     async function acceptCall() {
       if (!_callId || _callRole !== 'callee') return;
       stopCallRingSound();
+
+      // iOS Safari の自動再生ポリシー対応: ユーザージェスチャー内で audio を unlock
+      const remoteAudioEl = document.getElementById('remoteAudio');
+      if (remoteAudioEl) {
+        remoteAudioEl.muted = true;
+        remoteAudioEl.play().catch(() => {});
+        remoteAudioEl.pause();
+        remoteAudioEl.muted = false;
+      }
 
       try {
         _localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -9186,8 +9201,8 @@
   </div>
 
   <!-- 通話相手選択モーダル -->
-  <div id="callPickerModal">
-    <div class="call-picker-box">
+  <div id="callPickerModal" onclick="closeCallPicker()">
+    <div class="call-picker-box" onclick="event.stopPropagation()">
       <div class="call-picker-header">
         <span>通話する相手を選択</span>
         <button onclick="closeCallPicker()" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.2rem;padding:0;"><i class="fas fa-times"></i></button>
