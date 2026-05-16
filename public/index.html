@@ -1590,6 +1590,226 @@
       letter-spacing: 0.03em;
     }
 
+    /* === 通話オーバーレイ === */
+    @keyframes callPulse {
+      0%, 100% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.18); opacity: 0.3; }
+    }
+    @keyframes callSlideIn {
+      from { transform: translateY(100%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes callFadeOut {
+      from { transform: translateY(0); opacity: 1; }
+      to { transform: translateY(100%); opacity: 0; }
+    }
+
+    #callOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f2544 100%);
+      padding: env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px) env(safe-area-inset-bottom, 20px) env(safe-area-inset-left, 20px);
+      gap: 0;
+    }
+    #callOverlay.show {
+      display: flex;
+      animation: callSlideIn 0.38s cubic-bezier(0.32, 0.72, 0, 1) both;
+    }
+    #callOverlay.hide {
+      display: flex;
+      animation: callFadeOut 0.28s ease-in forwards;
+    }
+
+    #callIncomingView, #callActiveView {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      gap: 24px;
+    }
+
+    .call-status-label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .call-avatar-wrap {
+      position: relative;
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .call-avatar-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 2px solid rgba(59,130,246,0.45);
+      animation: callPulse 1.6s ease-in-out infinite;
+    }
+    .call-avatar-ring:nth-child(1) { inset: -14px; animation-delay: 0s; }
+    .call-avatar-ring:nth-child(2) { inset: -28px; animation-delay: 0.4s; }
+    .call-avatar-ring:nth-child(3) { inset: -42px; animation-delay: 0.8s; }
+    .call-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #374151, #1f2937);
+      color: white;
+      font-size: 2.2rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      border: 2px solid rgba(255,255,255,0.12);
+    }
+    .call-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .call-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: white;
+      letter-spacing: 0.01em;
+    }
+    .call-timer {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.6);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .call-btn-row {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      margin-top: 16px;
+    }
+    .call-btn-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .call-btn-label {
+      font-size: 0.75rem;
+      color: rgba(255,255,255,0.55);
+      letter-spacing: 0.04em;
+    }
+    .call-btn-circle {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      color: white;
+      transition: transform 0.15s ease, filter 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .call-btn-circle:active { transform: scale(0.9); filter: brightness(0.85); }
+    .call-btn-circle.accept { background: #22c55e; box-shadow: 0 4px 20px rgba(34,197,94,0.4); }
+    .call-btn-circle.decline, .call-btn-circle.hangup { background: #ef4444; box-shadow: 0 4px 20px rgba(239,68,68,0.4); }
+    .call-btn-circle.mute {
+      background: rgba(255,255,255,0.12);
+      border: 1.5px solid rgba(255,255,255,0.18);
+    }
+    .call-btn-circle.mute.active { background: rgba(255,255,255,0.28); }
+
+    #callButton {
+      background: none;
+      border: none;
+      color: #9ca3af;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #callButton:hover:not(:disabled) { color: white; background: rgba(255,255,255,0.08); }
+    #callButton:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    #callPickerModal {
+      position: fixed;
+      inset: 0;
+      z-index: 99998;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      background: rgba(0,0,0,0.55);
+      padding: 0 0 env(safe-area-inset-bottom, 0px) 0;
+    }
+    #callPickerModal.show { display: flex; }
+    .call-picker-box {
+      background: #1f2937;
+      border-radius: 1.25rem 1.25rem 0 0;
+      width: 100%;
+      max-width: 480px;
+      max-height: 70vh;
+      overflow-y: auto;
+      padding: 20px 0 24px;
+      animation: scaleInFade 0.22s ease both;
+    }
+    .call-picker-header {
+      padding: 0 20px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .call-picker-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: background 0.12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .call-picker-item:hover { background: rgba(255,255,255,0.06); }
+    .call-picker-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #374151, #1f2937);
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      border: 1.5px solid rgba(255,255,255,0.1);
+    }
+    .call-picker-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .call-picker-name { font-size: 0.95rem; color: white; font-weight: 500; }
+    .call-picker-status { font-size: 0.75rem; color: rgba(255,255,255,0.45); }
+
     /* === ルームリストアイテムアニメーション === */
     @keyframes roomSlideIn {
       from {
@@ -2184,6 +2404,20 @@
       }
       #serverListNotifBtn {
         display: none !important;
+      }
+      /* iOS PWA: safe-area-inset-bottomが0を返す場合にナビ下の白余白を防ぐ */
+      html {
+        background-color: #1f2937;
+      }
+      #mobileBottomNav::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        height: 60px;
+        background: #1f2937;
+        pointer-events: none;
       }
     }
     @media (max-width: 640px) {
@@ -2933,6 +3167,9 @@
               class="text-gray-600 hover:text-gray-800 hidden items-center p-3 -ml-3 mr-1 rounded-full"
               style="display:none;"><i class="fas fa-arrow-left"></i></button>
             <span id="currentRoomTitleText" class="flex-1"></span>
+            <button id="callButton" title="音声通話" onclick="openCallPicker()" disabled>
+              <i class="fas fa-phone"></i>
+            </button>
             <button id="toggleSearchButton" class="text-gray-500 hover:text-gray-800 ml-2"><i
                 class="fas fa-search"></i></button>
           </div>
@@ -3255,6 +3492,18 @@
     let typingUnsubscribe = null;
     let readReceiptDebounceTimer = null;
     let _lastSentReadMessageId = null;
+
+    // P2P Voice Call
+    let _callDoc = null, _callId = null, _peerConnection = null;
+    let _localStream = null, _callTimerInterval = null, _callTimeoutHandle = null;
+    let _callUnsubOffer = null, _callIncomingUnsub = null;
+    let _isMuted = false, _callRole = null;
+    let _ringRepeatHandle = null, _ringCtx = null;
+    const CALL_TIMEOUT_MS = 30000;
+    const STUN_CONFIG = { iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]};
     let messageLimit = 20;
     let allowPagination = false;
     // ページネーション用: 全ロード済みメッセージ（onSnapshotの最新20件 + 追加読み込み分）
@@ -3540,6 +3789,7 @@
               // FCMが有効な場合はFirestoreグローバルリスナーは不要（FCMが通知を担当）
               // Tauriのみ或いはFCMトークン取得失敗時はFirestoreリスナーをフォールバック
               setTimeout(() => setupGlobalNotificationListeners(), 2000);
+              initCallListener();
             } else {
               authContainer.classList.add("hidden");
               appContainer.classList.add("hidden");
@@ -3563,6 +3813,9 @@
             messagesDisplay.innerHTML = "";
             messageInput.disabled = true;
             sendMessageButton.disabled = true;
+            document.getElementById('callButton').disabled = true;
+            if (_callId) endCall(false);
+            if (_callIncomingUnsub) { _callIncomingUnsub(); _callIncomingUnsub = null; }
             stopPresenceSystem();
             if (serverListUnsubscribe) { serverListUnsubscribe(); serverListUnsubscribe = null; }
 
@@ -5668,6 +5921,7 @@
       messageInput.disabled = false;
       fileAttachButton.disabled = false;
       mentionButton.disabled = false;
+      document.getElementById('callButton').disabled = false;
       sendMessageButton.disabled = false;
       messageLimit = 20; // ルームに入り直したらリミットをリセット
       clearAttachedFile();
@@ -7800,6 +8054,25 @@
         if ('serviceWorker' in navigator) {
           const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
           console.log('Service Worker registered:', swRegistration);
+
+          // 通知クリック時: Tauri (Windows EXE) ではウィンドウをフォーカス
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'NOTIFICATION_CLICKED') {
+              if (window.__TAURI__) {
+                try {
+                  window.__TAURI__.window.getCurrent().setFocus();
+                } catch (e) {
+                  try { window.__TAURI__.invoke('tauri', { __tauriModule: 'Window', message: { cmd: 'setFocus' } }); } catch (_) {}
+                }
+              }
+              if (event.data.data?.type === 'incoming_call') {
+                handleCallNotificationClick(event.data.data);
+              }
+            }
+            if (event.data && event.data.type === 'CALL_DECLINED_FROM_NOTIFICATION') {
+              handleCallDeclinedFromNotification(event.data);
+            }
+          });
         }
 
         if (!messaging) messaging = getMessaging(app);
@@ -7939,6 +8212,415 @@
         }
       } catch (e) {
         fallbackCopyTextToClipboard(text);
+      }
+    }
+
+    // --- P2P Voice Call ---
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function renderCallAvatar(el, name, url) {
+      if (url) {
+        el.innerHTML = `<img src="${escapeHtml(url)}" alt="" onerror="this.parentElement.textContent='${escapeHtml((name||'?')[0].toUpperCase())}'" />`;
+      } else {
+        el.textContent = (name || '?')[0].toUpperCase();
+      }
+    }
+
+    function showCallOverlay(mode, opts) {
+      const overlay = document.getElementById('callOverlay');
+      const incomingView = document.getElementById('callIncomingView');
+      const activeView = document.getElementById('callActiveView');
+      incomingView.style.display = 'none';
+      activeView.style.display = 'none';
+      if (mode === 'incoming') {
+        renderCallAvatar(document.getElementById('callIncomingAvatar'), opts.name, opts.avatar);
+        document.getElementById('callIncomingName').textContent = opts.name || '不明';
+        incomingView.style.display = 'flex';
+      } else {
+        renderCallAvatar(document.getElementById('callActiveAvatar'), opts.name, opts.avatar);
+        document.getElementById('callActiveName').textContent = opts.name || '不明';
+        document.getElementById('callStatusLabel').textContent = opts.status || '発信中';
+        document.getElementById('callTimerDisplay').style.display = 'none';
+        document.getElementById('callTimeoutDisplay').style.display = 'block';
+        activeView.style.display = 'flex';
+      }
+      overlay.classList.remove('hide');
+      overlay.classList.add('show');
+    }
+
+    function hideCallOverlay() {
+      const overlay = document.getElementById('callOverlay');
+      overlay.classList.add('hide');
+      setTimeout(() => {
+        overlay.classList.remove('show', 'hide');
+      }, 300);
+    }
+
+    function startCallTimer() {
+      let elapsed = 0;
+      const display = document.getElementById('callTimerDisplay');
+      const timeoutDisplay = document.getElementById('callTimeoutDisplay');
+      display.style.display = 'block';
+      timeoutDisplay.style.display = 'none';
+      document.getElementById('callStatusLabel').textContent = '通話中';
+      _callTimerInterval = setInterval(() => {
+        elapsed++;
+        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const s = String(elapsed % 60).padStart(2, '0');
+        display.textContent = `${m}:${s}`;
+      }, 1000);
+    }
+
+    function stopCallTimer() {
+      if (_callTimerInterval) { clearInterval(_callTimerInterval); _callTimerInterval = null; }
+    }
+
+    function playCallRingSound() {
+      stopCallRingSound();
+      const ring = () => {
+        try {
+          _ringCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const freqs = [880, 1100];
+          freqs.forEach((freq, i) => {
+            const osc = _ringCtx.createOscillator();
+            const gain = _ringCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0, _ringCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.15, _ringCtx.currentTime + 0.05);
+            gain.gain.linearRampToValueAtTime(0, _ringCtx.currentTime + 0.6);
+            osc.connect(gain);
+            gain.connect(_ringCtx.destination);
+            osc.start(_ringCtx.currentTime + i * 0.08);
+            osc.stop(_ringCtx.currentTime + 0.7);
+          });
+        } catch(_) {}
+      };
+      ring();
+      _ringRepeatHandle = setInterval(ring, 2000);
+    }
+
+    function stopCallRingSound() {
+      if (_ringRepeatHandle) { clearInterval(_ringRepeatHandle); _ringRepeatHandle = null; }
+      if (_ringCtx) { try { _ringCtx.close(); } catch(_) {} _ringCtx = null; }
+    }
+
+    function setupPeerConnection(role) {
+      _peerConnection = new RTCPeerConnection(STUN_CONFIG);
+
+      if (_localStream) {
+        _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
+      }
+
+      _peerConnection.ontrack = (event) => {
+        const remoteAudio = document.getElementById('remoteAudio');
+        remoteAudio.srcObject = event.streams[0];
+        remoteAudio.muted = false;
+        remoteAudio.play().catch(() => {});
+      };
+
+      _peerConnection.onicecandidate = async (event) => {
+        if (!event.candidate || !_callId) return;
+        const { addDoc, collection } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+        const subCol = role === 'caller' ? 'callerCandidates' : 'calleeCandidates';
+        try {
+          await addDoc(collection(db, 'artifacts', appId, 'calls', _callId, subCol), event.candidate.toJSON());
+        } catch(_) {}
+      };
+
+      _peerConnection.onconnectionstatechange = () => {
+        const state = _peerConnection?.connectionState;
+        if (state === 'connected') {
+          if (_callTimeoutHandle) { clearTimeout(_callTimeoutHandle); _callTimeoutHandle = null; }
+          startCallTimer();
+        } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+          endCall(true);
+        }
+      };
+    }
+
+    async function listenForRemoteCandidates(role) {
+      const { collection, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+      const subCol = role === 'caller' ? 'calleeCandidates' : 'callerCandidates';
+      const unsub = onSnapshot(collection(db, 'artifacts', appId, 'calls', _callId, subCol), (snap) => {
+        snap.docChanges().forEach(async (change) => {
+          if (change.type === 'added' && _peerConnection) {
+            try {
+              await _peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+            } catch(_) {}
+          }
+        });
+      });
+      return unsub;
+    }
+
+    function initCallListener() {
+      if (!currentUserId) return;
+      if (_callIncomingUnsub) { _callIncomingUnsub(); _callIncomingUnsub = null; }
+      import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js').then(({ collection, query, where, onSnapshot }) => {
+        const q = query(
+          collection(db, 'artifacts', appId, 'calls'),
+          where('callee.uid', '==', currentUserId),
+          where('status', '==', 'ringing')
+        );
+        _callIncomingUnsub = onSnapshot(q, (snap) => {
+          snap.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+              const data = change.doc.data();
+              if (!_callId) {
+                handleIncomingCall(change.doc.id, data.caller);
+              }
+            }
+          });
+        });
+      });
+    }
+
+    async function openCallPicker() {
+      if (!currentServerData || !currentUserId) return;
+      const modal = document.getElementById('callPickerModal');
+      const list = document.getElementById('callPickerList');
+      list.innerHTML = '';
+
+      const memberIds = (currentServerData.joinedUsers || []).filter(uid => uid !== currentUserId);
+      if (memberIds.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:rgba(255,255,255,0.4);">メンバーがいません</div>';
+      } else {
+        for (const uid of memberIds) {
+          const user = cachedUsers[uid] || {};
+          const name = escapeHtml(user.nickname || user.displayName || uid.slice(0, 8));
+          const avatar = user.avatarUrl ? `<img src="${escapeHtml(user.avatarUrl)}" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />` : user.nickname?.[0]?.toUpperCase() || '?';
+          const div = document.createElement('div');
+          div.className = 'call-picker-item';
+          div.innerHTML = `<div class="call-picker-avatar">${avatar}</div><div><div class="call-picker-name">${name}</div></div>`;
+          div.onclick = () => {
+            closeCallPicker();
+            startCall(uid, user.nickname || user.displayName || uid.slice(0, 8), user.avatarUrl || '');
+          };
+          list.appendChild(div);
+        }
+      }
+
+      modal.classList.add('show');
+    }
+
+    function closeCallPicker() {
+      document.getElementById('callPickerModal').classList.remove('show');
+    }
+
+    async function startCall(uid, name, avatar) {
+      if (_callId) return;
+      const { addDoc, collection, serverTimestamp, updateDoc, doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+
+      _callRole = 'caller';
+      try {
+        _localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch(e) {
+        alert('マイクへのアクセスが拒否されました。設定を確認してください。');
+        return;
+      }
+
+      const myUser = cachedUsers[currentUserId] || {};
+      const callData = {
+        caller: { uid: currentUserId, nickname: myUser.nickname || myUser.displayName || '', avatarUrl: myUser.avatarUrl || '' },
+        callee: { uid, nickname: name, avatarUrl: avatar },
+        status: 'ringing',
+        createdAt: serverTimestamp()
+      };
+      const callRef = await addDoc(collection(db, 'artifacts', appId, 'calls'), callData);
+      _callId = callRef.id;
+      _callDoc = callRef;
+
+      setupPeerConnection('caller');
+
+      const offer = await _peerConnection.createOffer();
+      await _peerConnection.setLocalDescription(offer);
+      await updateDoc(callRef, { offer: { type: offer.type, sdp: offer.sdp } });
+
+      showCallOverlay('active', { name, avatar, status: '発信中' });
+
+      // 着信通知を送る
+      try {
+        await fetch(`${WORKER_BASE_URL}/api/sendCallNotification`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            calleeId: uid,
+            callerNickname: myUser.nickname || myUser.displayName || '',
+            callerAvatarUrl: myUser.avatarUrl || '',
+            callId: _callId,
+            appId
+          })
+        });
+      } catch(_) {}
+
+      // answerを待つ
+      const unsubAnswer = onSnapshot(callRef, async (snap) => {
+        const d = snap.data();
+        if (!d) return;
+        if (d.status === 'declined' || d.status === 'ended' || d.status === 'missed') {
+          unsubAnswer();
+          endCall(true);
+          return;
+        }
+        if (d.answer && _peerConnection && !_peerConnection.currentRemoteDescription) {
+          await _peerConnection.setRemoteDescription(new RTCSessionDescription(d.answer));
+          listenForRemoteCandidates('caller').then(unsub => { _callUnsubOffer = unsub; });
+          unsubAnswer();
+        }
+      });
+      _callUnsubOffer = unsubAnswer;
+
+      // タイムアウト
+      _callTimeoutHandle = setTimeout(async () => {
+        if (_callId) {
+          try { await updateDoc(doc(db, 'artifacts', appId, 'calls', _callId), { status: 'missed' }); } catch(_) {}
+          endCall(true);
+        }
+      }, CALL_TIMEOUT_MS);
+    }
+
+    async function handleIncomingCall(callId, callerData) {
+      if (_callId) return;
+      _callId = callId;
+      _callRole = 'callee';
+
+      playCallRingSound();
+      showCallOverlay('incoming', { name: callerData.nickname || '不明', avatar: callerData.avatarUrl || '' });
+
+      // 相手がキャンセルした場合を監視
+      const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+      const unsub = onSnapshot(doc(db, 'artifacts', appId, 'calls', callId), (snap) => {
+        const d = snap.data();
+        if (!d) { unsub(); endCall(true); return; }
+        if (d.status === 'ended' || d.status === 'missed') {
+          unsub();
+          stopCallRingSound();
+          endCall(true);
+        }
+      });
+      _callUnsubOffer = unsub;
+    }
+
+    async function acceptCall() {
+      if (!_callId || _callRole !== 'callee') return;
+      stopCallRingSound();
+
+      try {
+        _localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch(e) {
+        alert('マイクへのアクセスが拒否されました。');
+        endCall(false);
+        return;
+      }
+
+      if (_callUnsubOffer) { _callUnsubOffer(); _callUnsubOffer = null; }
+
+      const { doc, getDoc, updateDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+      const callRef = doc(db, 'artifacts', appId, 'calls', _callId);
+      const snap = await getDoc(callRef);
+      const callData = snap.data();
+
+      setupPeerConnection('callee');
+      await _peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer));
+
+      const answer = await _peerConnection.createAnswer();
+      await _peerConnection.setLocalDescription(answer);
+      await updateDoc(callRef, {
+        answer: { type: answer.type, sdp: answer.sdp },
+        status: 'active'
+      });
+
+      _callUnsubOffer = await listenForRemoteCandidates('callee');
+
+      const callerData = callData.caller || {};
+      showCallOverlay('active', { name: callerData.nickname || '不明', avatar: callerData.avatarUrl || '', status: '通話中' });
+    }
+
+    async function declineCall() {
+      if (!_callId) return;
+      stopCallRingSound();
+      try {
+        const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+        await updateDoc(doc(db, 'artifacts', appId, 'calls', _callId), { status: 'declined' });
+      } catch(_) {}
+      endCall(true);
+    }
+
+    async function endCall(skipFirestore) {
+      const callIdCopy = _callId;
+      _callId = null;
+      _callRole = null;
+
+      stopCallRingSound();
+      stopCallTimer();
+
+      if (_callTimeoutHandle) { clearTimeout(_callTimeoutHandle); _callTimeoutHandle = null; }
+      if (_callUnsubOffer) { _callUnsubOffer(); _callUnsubOffer = null; }
+
+      if (_peerConnection) {
+        _peerConnection.onconnectionstatechange = null;
+        _peerConnection.ontrack = null;
+        _peerConnection.onicecandidate = null;
+        _peerConnection.close();
+        _peerConnection = null;
+      }
+      if (_localStream) {
+        _localStream.getTracks().forEach(t => t.stop());
+        _localStream = null;
+      }
+      const remoteAudio = document.getElementById('remoteAudio');
+      if (remoteAudio) { remoteAudio.srcObject = null; }
+
+      if (!skipFirestore && callIdCopy) {
+        try {
+          const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+          await updateDoc(doc(db, 'artifacts', appId, 'calls', callIdCopy), { status: 'ended' });
+        } catch(_) {}
+      }
+
+      _isMuted = false;
+      const muteBtn = document.getElementById('muteButton');
+      if (muteBtn) { muteBtn.classList.remove('active'); muteBtn.querySelector('i').className = 'fas fa-microphone'; }
+      document.getElementById('muteLabel').textContent = 'ミュート';
+
+      hideCallOverlay();
+    }
+
+    function toggleMute() {
+      if (!_localStream) return;
+      _isMuted = !_isMuted;
+      _localStream.getAudioTracks().forEach(t => { t.enabled = !_isMuted; });
+      const btn = document.getElementById('muteButton');
+      const label = document.getElementById('muteLabel');
+      if (_isMuted) {
+        btn.classList.add('active');
+        btn.querySelector('i').className = 'fas fa-microphone-slash';
+        label.textContent = 'ミュート解除';
+      } else {
+        btn.classList.remove('active');
+        btn.querySelector('i').className = 'fas fa-microphone';
+        label.textContent = 'ミュート';
+      }
+    }
+
+    async function handleCallNotificationClick(data) {
+      if (!data.callId) return;
+      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+      try {
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'calls', data.callId));
+        if (snap.exists() && snap.data().status === 'ringing') {
+          handleIncomingCall(data.callId, { nickname: data.callerNickname, avatarUrl: data.callerAvatarUrl });
+        }
+      } catch(_) {}
+    }
+
+    function handleCallDeclinedFromNotification(data) {
+      if (_callId && data.callId === _callId) {
+        declineCall();
       }
     }
 
@@ -8457,6 +9139,65 @@
       </div>
     </div>
   </div>
+
+  <!-- 通話オーバーレイ -->
+  <div id="callOverlay">
+    <!-- 着信ビュー -->
+    <div id="callIncomingView" style="display:none">
+      <div class="call-status-label">着信中</div>
+      <div class="call-avatar-wrap">
+        <div class="call-avatar-ring"></div>
+        <div class="call-avatar-ring"></div>
+        <div class="call-avatar-ring"></div>
+        <div class="call-avatar" id="callIncomingAvatar"></div>
+      </div>
+      <div class="call-name" id="callIncomingName"></div>
+      <div class="call-btn-row">
+        <div class="call-btn-col">
+          <button class="call-btn-circle decline" onclick="declineCall()"><i class="fas fa-phone-slash"></i></button>
+          <span class="call-btn-label">拒否</span>
+        </div>
+        <div class="call-btn-col">
+          <button class="call-btn-circle accept" onclick="acceptCall()"><i class="fas fa-phone"></i></button>
+          <span class="call-btn-label">応答</span>
+        </div>
+      </div>
+    </div>
+    <!-- 発信・通話中ビュー -->
+    <div id="callActiveView" style="display:none">
+      <div class="call-status-label" id="callStatusLabel">発信中</div>
+      <div class="call-avatar-wrap">
+        <div class="call-avatar" id="callActiveAvatar"></div>
+      </div>
+      <div class="call-name" id="callActiveName"></div>
+      <div class="call-timer" id="callTimerDisplay" style="display:none">00:00</div>
+      <div class="call-timer" id="callTimeoutDisplay" style="color:rgba(255,255,255,0.4);font-size:0.82rem;">30秒後に自動終了</div>
+      <div class="call-btn-row">
+        <div class="call-btn-col">
+          <button class="call-btn-circle mute" id="muteButton" onclick="toggleMute()"><i class="fas fa-microphone"></i></button>
+          <span class="call-btn-label" id="muteLabel">ミュート</span>
+        </div>
+        <div class="call-btn-col">
+          <button class="call-btn-circle hangup" onclick="endCall(false)"><i class="fas fa-phone-slash"></i></button>
+          <span class="call-btn-label">終了</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通話相手選択モーダル -->
+  <div id="callPickerModal">
+    <div class="call-picker-box">
+      <div class="call-picker-header">
+        <span>通話する相手を選択</span>
+        <button onclick="closeCallPicker()" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.2rem;padding:0;"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="callPickerList"></div>
+    </div>
+  </div>
+
+  <!-- リモート音声 -->
+  <audio id="remoteAudio" autoplay playsinline style="display:none"></audio>
 
   <!-- アプリ内通知スタック -->
   <div id="notifStack" class="fixed bottom-5 right-5 z-[9997] flex flex-col gap-2 items-end"

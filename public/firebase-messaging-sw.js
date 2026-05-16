@@ -61,37 +61,71 @@ messaging.onBackgroundMessage((payload) => {
   }
 
   // 自動表示されないデータメッセージの場合のみ、独自に通知を作成する
-  const notificationOptions = {
-    body: body,
-    icon: '/icon-192x192.png?v=4',
-    badge: '/icon-192x192.png?v=4',
-    tag: data.roomId || 'covo-notification',
-    renotify: true,
-    data: data,
-    actions: [
-      { action: 'open', title: '開く' }
-    ]
-  };
+  let notificationOptions;
+  if (data.type === 'incoming_call') {
+    notificationOptions = {
+      body: body,
+      icon: '/icon-192x192.png?v=5',
+      badge: '/icon-192x192.png?v=5',
+      tag: `call-${data.callId || 'covo-call'}`,
+      renotify: true,
+      requireInteraction: true,
+      data: data,
+      actions: [
+        { action: 'accept', title: '応答' },
+        { action: 'decline', title: '拒否' }
+      ]
+    };
+  } else {
+    notificationOptions = {
+      body: body,
+      icon: '/icon-192x192.png?v=5',
+      badge: '/icon-192x192.png?v=5',
+      tag: data.roomId || 'covo-notification',
+      renotify: true,
+      data: data,
+      actions: [
+        { action: 'open', title: '開く' }
+      ]
+    };
+  }
 
   self.registration.showNotification(title, notificationOptions);
 });
 
-// 通知クリック時にアプリを開く
+// 通知クリック時にアプリを開く / フォーカスする
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const roomId = event.notification.data?.roomId;
-  const urlToOpen = self.location.origin + '/index.html' + (roomId ? `?room=${roomId}` : '');
+  const data = event.notification.data || {};
+  const action = event.action;
+  const urlToOpen = self.location.origin + '/';
+
+  // 着信通知の「拒否」アクション
+  if (data.type === 'incoming_call' && action === 'decline') {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+            client.postMessage({ type: 'CALL_DECLINED_FROM_NOTIFICATION', callId: data.callId, data });
+            return;
+          }
+        }
+      })
+    );
+    return;
+  }
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // 既に開いているタブがあればフォーカス
       for (const client of clientList) {
-        if (client.url.includes('/index.html') && 'focus' in client) {
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          // Tauri (Windows EXE) 向け: postMessage でアプリ側にウィンドウフォーカスを依頼
+          client.postMessage({ type: 'NOTIFICATION_CLICKED', data });
           return client.focus();
         }
       }
-      // なければ新規タブで開く
+      // 開いているウィンドウがなければ新規で開く
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }

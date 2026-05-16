@@ -18,6 +18,9 @@ export default {
     if (url.pathname === "/api/joinRoom" && request.method === "POST") {
       return await handleJoinRoom(request, env);
     }
+    if (url.pathname === "/api/sendCallNotification" && request.method === "POST") {
+      return await handleSendCallNotification(request, env);
+    }
     if (url.pathname === "/api/sendNotification" && request.method === "POST") {
       return await handleSendNotification(request, env);
     }
@@ -228,6 +231,138 @@ async function handleJoinRoom(request, env) {
     if (updateData.error) {
        console.error("Firestore Update Error:", updateData.error);
        return new Response(JSON.stringify({ success: false, error: "Failed to update joinedUsers" }), { status: 500, headers: corsHeaders });
+    }
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });
+  } catch (error) {
+    console.error(error);
+    return new Response(JSON.stringify({ success: false, error: error.toString() }), { status: 500, headers: corsHeaders });
+  }
+}
+
+// -------------------------------------------------------------
+// 着信通知送信処理
+// -------------------------------------------------------------
+async function handleSendCallNotification(request, env) {
+  try {
+    const { calleeId, callerNickname, callerAvatarUrl, callId, appId } = await request.json();
+    if (!calleeId || !callId || !appId) {
+      return new Response(JSON.stringify({ success: false, error: "Missing fields" }), { status: 400, headers: corsHeaders });
+    }
+
+    const workerToken = await getWorkerAuthToken(env);
+    if (!workerToken) return new Response(JSON.stringify({ success: false, error: "Worker Auth failed" }), { status: 500, headers: corsHeaders });
+
+    if (!env.SERVICE_ACCOUNT_JSON) {
+      return new Response(JSON.stringify({ success: false, error: "SERVICE_ACCOUNT_JSON secret is not set" }), { status: 500, headers: corsHeaders });
+    }
+    const fcmAccessToken = await getFCMToken(env.SERVICE_ACCOUNT_JSON);
+
+    const projectId = env.FIREBASE_PROJECT_ID;
+
+    const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/artifacts/${appId}/users/${calleeId}`;
+    const userRes = await fetch(userUrl, { headers: { "Authorization": `Bearer ${workerToken}` } });
+    const userData = await userRes.json();
+
+    if (userData.error || !userData.fields || !userData.fields.fcmTokens) {
+      return new Response(JSON.stringify({ success: false, error: "No FCM tokens found for callee" }), { status: 404, headers: corsHeaders });
+    }
+
+    const tokens = userData.fields.fcmTokens.arrayValue?.values || [];
+    const invalidTokens = [];
+    const title = `${callerNickname || '不明なユーザー'} から着信`;
+    const body = '音声通話の着信があります';
+
+    for (const t of tokens) {
+      const tokenStr = t.stringValue;
+      const fcmRes = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${fcmAccessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: {
+            token: tokenStr,
+            data: {
+              type: "incoming_call",
+              callId,
+              callerNickname: callerNickname || '',
+              callerAvatarUrl: callerAvatarUrl || '',
+              title,
+              body
+            },
+            android: {
+              priority: "high",
+              notification: {
+                title,
+                body,
+                channel_id: "covo_calls",
+                notification_priority: "PRIORITY_MAX",
+                default_sound: true
+              }
+            },
+            apns: {
+              payload: {
+                aps: {
+                  alert: { title, body },
+                  sound: "default",
+                  "content-available": 1
+                }
+              },
+              headers: { "apns-priority": "10" }
+            },
+            webpush: {
+              notification: {
+                title,
+                body,
+                icon: "/icon-192x192.png?v=5",
+                badge: "/icon-192x192.png?v=5",
+                tag: `call-${callId}`,
+                requireInteraction: true,
+                renotify: true
+              },
+              headers: { "Urgency": "high" },
+              fcm_options: { link: "/" }
+            }
+          }
+        })
+      });
+
+      const fcmResult = await fcmRes.json();
+      if (fcmResult.error) {
+        console.error("FCM Call Notification Error:", fcmResult.error);
+        const errorCode = fcmResult.error.details?.[0]?.errorCode || fcmResult.error.code;
+        if (errorCode === 'UNREGISTERED' || errorCode === 404 ||
+            fcmResult.error.status === 'NOT_FOUND' ||
+            (fcmResult.error.message && fcmResult.error.message.includes('not a valid FCM'))) {
+          invalidTokens.push(tokenStr);
+        }
+      }
+    }
+
+    if (invalidTokens.length > 0) {
+      try {
+        const removeBody = {
+          writes: [{
+            transform: {
+              document: `projects/${projectId}/databases/(default)/documents/artifacts/${appId}/users/${calleeId}`,
+              fieldTransforms: [{
+                fieldPath: "fcmTokens",
+                removeAllFromArray: { values: invalidTokens.map(t => ({ stringValue: t })) }
+              }]
+            }
+          }]
+        };
+        const commitUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+        await fetch(commitUrl, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${workerToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(removeBody)
+        });
+      } catch (cleanupErr) {
+        console.error("Token cleanup error:", cleanupErr);
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: corsHeaders });

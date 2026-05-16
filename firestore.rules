@@ -79,6 +79,21 @@ service cloud.firestore {
         allow write: if isAuthenticated() && request.auth.uid == userId;
       }
 
+      // 4. P2P音声通話シグナリング
+      match /calls/{callId} {
+        allow read, update: if isAuthenticated() &&
+          (resource.data.caller.uid == request.auth.uid ||
+           resource.data.callee.uid == request.auth.uid);
+        allow create: if isAuthenticated() &&
+          request.resource.data.caller.uid == request.auth.uid;
+        match /callerCandidates/{candId} {
+          allow read, create: if isAuthenticated();
+        }
+        match /calleeCandidates/{candId} {
+          allow read, create: if isAuthenticated();
+        }
+      }
+
       // ============================================================
       // サーバーベース構造
       // ============================================================
