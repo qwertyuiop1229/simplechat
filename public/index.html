@@ -8474,7 +8474,9 @@
         }
         if (d.answer && _peerConnection && !_peerConnection.currentRemoteDescription) {
           await _peerConnection.setRemoteDescription(new RTCSessionDescription(d.answer));
-          listenForRemoteCandidates('caller').then(unsub => { _callUnsubOffer = unsub; });
+          listenForRemoteCandidates('caller').then(unsub => {
+            if (_callId) { _callUnsubOffer = unsub; } else { unsub(); }
+          });
           unsubAnswer();
         }
       });
@@ -8552,7 +8554,9 @@
       _callUnsubOffer = await listenForRemoteCandidates('callee');
 
       const callerData = callData.caller || {};
-      showCallOverlay('active', { name: callerData.nickname || '不明', avatar: callerData.avatarUrl || '', status: '通話中' });
+      showCallOverlay('active', { name: callerData.nickname || '不明', avatar: callerData.avatarUrl || '', status: '接続中' });
+      // callee にタイムアウトはないので非表示
+      document.getElementById('callTimeoutDisplay').style.display = 'none';
     }
 
     async function declineCall() {
