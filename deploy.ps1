@@ -1,4 +1,4 @@
-# SimpleChat Windows Deploy Script
+# Covo Deploy Script
 # Usage: .\deploy.ps1       (Confirm)
 #        .\deploy.ps1 -y    (No Confirm)
 #        npm run deploy     (No Confirm / Auto)
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "====================================" -ForegroundColor Cyan
-Write-Host "  SimpleChat Deploy Script" -ForegroundColor Cyan
+Write-Host "  Covo Deploy Script" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -20,7 +20,7 @@ if (-not (Test-Path $versionJsonPath)) {
     exit 1
 }
 
-$versionData = Get-Content $versionJsonPath -Raw | ConvertFrom-Json
+$versionData = [System.IO.File]::ReadAllText($versionJsonPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
 $currentVersion = $versionData.version
 Write-Host "Current version: $currentVersion" -ForegroundColor Yellow
 
@@ -59,42 +59,45 @@ if (-not $y) {
 
 Write-Host "Deploying v$newVersion..." -ForegroundColor Green
 
-# Build Tailwind CSS
+# [0/5] Build Tailwind CSS
 Write-Host "[0/5] Building Tailwind CSS..." -ForegroundColor Green
 node_modules\.bin\tailwindcss.cmd -i tailwind.input.css -o public/styles.css --minify
 
-# Write new version to public/version.json
+# [1/5] Update version.json + sync tauri.conf.json (must match git tag)
 $versionJsonContent = "{`n  `"version`": `"$newVersion`"`n}`n"
 [System.IO.File]::WriteAllText($versionJsonPath, $versionJsonContent, [System.Text.UTF8Encoding]::new($false))
-
 Write-Host "[1/5] Updated version.json to $newVersion" -ForegroundColor Green
 
-# Sync version to tauri.conf.json
 $tauriConfPath = Join-Path $PSScriptRoot "src-tauri\tauri.conf.json"
 if (Test-Path $tauriConfPath) {
-    $tauriConfRaw = Get-Content $tauriConfPath -Raw
-    # 既存のバージョン値に関係なく常に置換（version.jsonとのズレに強い）
-    $tauriConfRaw = $tauriConfRaw -replace '"version":\s*"[\d.]+"', """version"": ""$newVersion"""
-    $tauriConfRaw | Set-Content $tauriConfPath -NoNewline
+    $tauriConfRaw = [System.IO.File]::ReadAllText($tauriConfPath, [System.Text.Encoding]::UTF8)
+    $tauriConfNew = $tauriConfRaw -replace '"version":\s*"[^"]+"', ('"version": "' + $newVersion + '"')
+    [System.IO.File]::WriteAllText($tauriConfPath, $tauriConfNew, [System.Text.UTF8Encoding]::new($false))
+    # 確認: 書き込み後に読み直して一致検証
+    $verify = [System.IO.File]::ReadAllText($tauriConfPath, [System.Text.Encoding]::UTF8)
+    if ($verify -notlike ('*"version": "' + $newVersion + '"*')) {
+        Write-Host "ERROR: tauri.conf.json sync failed — deploy aborted" -ForegroundColor Red
+        exit 1
+    }
     Write-Host "       Synced tauri.conf.json to $newVersion" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: src-tauri/tauri.conf.json not found, skipping..." -ForegroundColor Yellow
 }
 
-# git add -> git commit -> tag
+# [2/5] git commit
 Write-Host "[2/5] Committing changes..." -ForegroundColor Green
 git add -A
 git commit -m "Release v$newVersion"
 
+# [3/5] git tag
 Write-Host "[3/5] Creating tag $tagName..." -ForegroundColor Green
 git tag $tagName
 
-# Firebase Hosting + Cloudflare Worker deploy
-# DEPLOY_NO_BUMP=1 で bump-version.js のバンプをスキップ（既にバンプ済み）
+# [4/5] Firebase Hosting + Cloudflare Worker deploy
 Write-Host "[4/5] Deploying to Firebase Hosting + Cloudflare Worker..." -ForegroundColor Green
-$env:DEPLOY_NO_BUMP = "1"
 firebase deploy --only hosting
-$env:DEPLOY_NO_BUMP = $null
 
-# git push (GitHub Actions が EXE をビルドする)
+# [5/5] git push → GitHub Actions が Windows インストーラーをビルドする
 Write-Host "[5/5] Pushing to GitHub..." -ForegroundColor Green
 git push origin HEAD --tags
 
@@ -106,5 +109,5 @@ Write-Host "  Tag: $tagName" -ForegroundColor Green
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Firebase: https://simplechat-65a0d.web.app" -ForegroundColor Yellow
-Write-Host "GitHub Actions (EXE build): https://github.com/qwertyuiop1229/simplechat/actions" -ForegroundColor Yellow
+Write-Host "GitHub Actions (Windows build): https://github.com/qwertyuiop1229/simplechat/actions" -ForegroundColor Yellow
 Write-Host ""
