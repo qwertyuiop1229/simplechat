@@ -621,6 +621,18 @@ pub fn run() {
         .setup(|app| {
             let _handle = app.handle().clone();
 
+            // アップデート後にショートカット・タスクバーのアイコンキャッシュを更新する
+            // ie4uinit.exe -show は Windows シェルにアイコン再読み込みを要求する標準的な方法
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x08000000;
+                let _ = std::process::Command::new("ie4uinit.exe")
+                    .arg("-show")
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+            }
+
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState, ShortcutEvent};
 
             let ctrl_shift_s = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyS);

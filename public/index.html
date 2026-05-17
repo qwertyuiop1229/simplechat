@@ -12,10 +12,11 @@
   <meta name="robots" content="noindex, nofollow" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#3b82f6" />
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=5" />
-  <link rel="icon" type="image/png" href="icon-192x192.png?v=5" />
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=5" />
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=5" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=6" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icon-32x32.png?v=6" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png?v=6" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=6" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=6" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -4993,24 +4994,47 @@
       }
     }
 
+    let _heartbeatInterval = null;
+
+    function startHeartbeat() {
+      if (_heartbeatInterval) return;
+      // 15分ごとにFirestoreへ直接online書き込み（10ユーザーで960回/日 = 無料枠の5%）
+      _heartbeatInterval = setInterval(() => {
+        if (document.visibilityState !== 'hidden') updateUserStatus('online');
+      }, 15 * 60 * 1000);
+    }
+
+    function stopHeartbeat() {
+      if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+    }
+
     function startPresenceSystem() {
+      _beaconSent = false;
+      refreshCachedIdToken();
+      if (_idTokenRefreshTimer) clearInterval(_idTokenRefreshTimer);
+      _idTokenRefreshTimer = setInterval(refreshCachedIdToken, 50 * 60 * 1000); // 50分ごとに更新（トークン有効期限1時間）
       updateUserStatus('online');
       resetAwayTimer();
+      startHeartbeat();
       document.addEventListener("visibilitychange", handleVisibilityChange);
       window.addEventListener("beforeunload", handlePageClose);
       window.addEventListener("pagehide", handlePageClose);  // Safari/iPad対応
-      window.addEventListener('focus', handleFocus);
-      window.addEventListener('blur', handleBlur);
+      window.addEventListener("freeze", handlePageClose);    // iOS PWA タスクキル前のfreeze
+      // blur/focus は削除: URLバークリックなどで誤検知が多くvisibilitychangeで十分カバーできる
       subscribeToUserStatus();
 
       if (memberListRefreshInterval) clearInterval(memberListRefreshInterval);
       memberListRefreshInterval = setInterval(() => {
         renderMembersList(cachedUsers);
-      }, 60000);
+      }, 180000); // 3分（stale 8分の安全網として十分）
     }
 
     function stopPresenceSystem() {
       stopAwayTimer();
+      stopHeartbeat();
+      _beaconSent = false;
+      if (_idTokenRefreshTimer) { clearInterval(_idTokenRefreshTimer); _idTokenRefreshTimer = null; }
+      _cachedIdToken = null;
       if (memberListRefreshInterval) {
         clearInterval(memberListRefreshInterval);
         memberListRefreshInterval = null;
@@ -5018,8 +5042,7 @@
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handlePageClose);
       window.removeEventListener("pagehide", handlePageClose);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener("freeze", handlePageClose);
       if (unsubscribeUserStatus) {
         unsubscribeUserStatus();
         unsubscribeUserStatus = null;
@@ -5028,48 +5051,60 @@
       unsubscribeStatusArray = [];
     }
 
-    const handleFocus = () => {
-      updateUserStatus('online');
-      resetAwayTimer();
-    };
-    const handleBlur = () => {
-      updateUserStatus('offline');
-      stopAwayTimer();
-    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        // hidden時もsendBeaconで確実にオフライン化
-        sendOfflineBeacon();
-        updateUserStatus('offline');
+        sendOfflineBeacon(); // Worker経由でFirestoreをofflineに（クライアント直書きは不要）
         stopAwayTimer();
       } else {
+        _beaconSent = false; // 次のhide時にまたビーコンを送れるようリセット
         updateUserStatus('online');
         resetAwayTimer();
       }
     };
 
-    // タブ閉じ・ページ離脱時の確実なオフライン化
-    // beforeunload (Chrome/Firefox) + pagehide (Safari/iPad) の両方をリスン
-    const handlePageClose = (e) => {
+    // タブ閉じ・ページ離脱時の確実なオフライン化（_beaconSentで重複防止）
+    const handlePageClose = () => {
       sendOfflineBeacon();
     };
 
-    // fetch keepalive でCloudflare Worker経由で確実にオフライン化
-    // credentials:'omit' でCORSの * ワイルドカードと競合しないようにする
+    // ビーコン送信済みフラグ（visibilitychange:hidden → pagehide/freeze の重複送信防止）
+    let _beaconSent = false;
+    // Worker認証用: Firebase IDトークンをキャッシュ（sendBeaconは同期のため事前取得が必要）
+    let _cachedIdToken = null;
+    let _idTokenRefreshTimer = null;
+
+    async function refreshCachedIdToken() {
+      try {
+        const { getAuth } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
+        const user = getAuth().currentUser;
+        if (user) _cachedIdToken = await user.getIdToken(false);
+      } catch(e) {}
+    }
+
+    // sendBeacon（ページアンロード・タスクキル時に最も信頼性が高い）+ fallback fetch
     function sendOfflineBeacon() {
-      if (!userId) return;
+      if (!userId || _beaconSent) return;
+      _beaconSent = true;
       const url = 'https://simplechat-api.astro-fray-server.workers.dev/api/setOffline';
+      const data = JSON.stringify({ userId, appId, idToken: _cachedIdToken || '' });
+      try {
+        // sendBeacon はブラウザがバックグラウンドで送信完了を保証する
+        if (navigator.sendBeacon) {
+          const blob = new Blob([data], { type: 'application/json' });
+          navigator.sendBeacon(url, blob);
+          return;
+        }
+      } catch (_) {}
+      // フォールバック: keepalive fetch
       try {
         fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, appId }),
+          body: data,
           keepalive: true,
           credentials: 'omit'
         }).catch(() => { });
-      } catch (e) {
-        console.error('sendOfflineBeacon error:', e);
-      }
+      } catch (e) {}
     }
 
     let _lastReportedStatusStr = null;
@@ -5205,11 +5240,13 @@
       const processedUsers = filtered.map(u => {
         let computedState = u.state || 'offline';
         
-        // 15分（900,000ミリ秒）以上更新がない場合は自動的にオフライン扱いにする
+        // 8分以上更新がない場合はオフライン扱いにする（Worker Cronの主検出の安全網）
+        // Worker Cronが4分タイムアウトで検出→Firestoreに書く→onSnapshotで反映
+        // このクライアント側チェックはCron/ネットワーク障害時のフォールバック
         if (computedState === 'online' || computedState === 'away') {
           if (u.last_changed && u.last_changed.toDate) {
             const timeDiff = Date.now() - u.last_changed.toDate().getTime();
-            if (timeDiff > 15 * 60 * 1000) {
+            if (timeDiff > 35 * 60 * 1000) {
               computedState = 'offline';
             }
           }
@@ -8459,7 +8496,8 @@
           if (lbl) lbl.textContent = '通話中';
           startCallTimer();
         } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-          endCall(true, 'connectionLost');
+          // skipFirestore=false にしてFirestoreのstatusを更新 → 相手側も通話終了を検知できる
+          endCall(false, 'connectionLost');
         }
       };
     }
@@ -8541,7 +8579,7 @@
       // ① UIを即時表示（マイク取得前でもユーザーに即フィードバック）
       showCallOverlay('active', { name, avatar, status: '発信中' });
 
-      const { addDoc, collection, serverTimestamp, doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+      const { doc, setDoc, updateDoc, collection, serverTimestamp, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
 
       try {
         _localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -8553,14 +8591,20 @@
 
       const myUser = cachedUsers.find(u => u.id === userId) || {};
 
-      // ② prewarmしたPeerConnectionを再利用 → ICE候補が既に収集済み
+      // ② ICE収集が始まる前にcallIdを確定する（onicecandidate内でcallIdが必要）
+      // doc()はクライアント側でIDを即時生成するためFirestore書き込み前でも使える
+      const newCallRef = doc(collection(db, 'artifacts', appId, 'calls'));
+      _callId = newCallRef.id;
+      _callDoc = newCallRef;
+
+      // ③ prewarmしたPeerConnectionを再利用 → ICE候補が既に収集済み
       setupPeerConnection('caller');
 
-      // ③ offerを先に作成
+      // ④ offerを作成 → setLocalDescriptionでICE収集開始（_callIdが確定済みなので候補を即書き込み可能）
       const offer = await _peerConnection.createOffer();
       await _peerConnection.setLocalDescription(offer);
 
-      // ④ Firestore書き込みを1回にまとめる（offer込みで初回書き込み → ~300ms節約）
+      // ⑤ Firestore書き込み（offer込みで初回書き込み、setDocでIDを指定）
       const callData = {
         caller: { uid: userId, nickname: myUser.nickname || myUser.displayName || '', avatarUrl: myUser.avatarUrl || '' },
         callee: { uid, nickname: name, avatarUrl: avatar },
@@ -8569,11 +8613,9 @@
         offer: { type: offer.type, sdp: offer.sdp },
         createdAt: serverTimestamp()
       };
-      const callRef = await addDoc(collection(db, 'artifacts', appId, 'calls'), callData);
-      _callId = callRef.id;
-      _callDoc = callRef;
+      await setDoc(newCallRef, callData);
 
-      // ⑤ FCM通知はfire-and-forget（awaitしない → ~1s節約）
+      // ⑥ FCM通知はfire-and-forget（awaitしない → ~1s節約）
       fetch(`${WORKER_BASE_URL}/api/sendCallNotification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -8587,7 +8629,7 @@
       }).catch(() => {});
 
       // answerを待つ
-      const unsubAnswer = onSnapshot(callRef, async (snap) => {
+      const unsubAnswer = onSnapshot(newCallRef, async (snap) => {
         const d = snap.data();
         if (!d) return;
         if (d.status === 'declined') {
@@ -8610,7 +8652,7 @@
           unsubAnswer();
           // 通話確立後も相手が終了したら検知する
           if (_callId) {
-            _callEndUnsub = onSnapshot(callRef, (snap2) => {
+            _callEndUnsub = onSnapshot(newCallRef, (snap2) => {
               const d2 = snap2.data();
               if (!d2 || d2.status === 'ended' || d2.status === 'missed') {
                 if (_callEndUnsub) { _callEndUnsub(); _callEndUnsub = null; }

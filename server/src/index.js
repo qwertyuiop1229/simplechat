@@ -995,15 +995,36 @@ async function handleShareFile(request, env) {
   }
 }
 
-// 確実なオフライン状態変更（navigator.sendBeacon用）
+
+async function verifyFirebaseIdToken(idToken, env) {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${env.FIREBASE_API_KEY}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken })
+    });
+    const data = await res.json();
+    if (data.error || !data.users || data.users.length === 0) return null;
+    return data.users[0].localId;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function handleSetOffline(request, env) {
   try {
     const bodyText = await request.text();
     const data = JSON.parse(bodyText);
-    const { userId, appId } = data;
-    
-    if (!userId || !appId) {
+    const { userId, appId, idToken } = data;
+
+    if (!userId || !appId || !idToken) {
       return new Response("Missing fields", { status: 400, headers: corsHeaders });
+    }
+
+    const verifiedUid = await verifyFirebaseIdToken(idToken, env);
+    if (!verifiedUid || verifiedUid !== userId) {
+      return new Response("Unauthorized", { status: 401, headers: corsHeaders });
     }
 
     const workerToken = await getWorkerAuthToken(env);
